@@ -1,4 +1,9 @@
-export default function StartScreen({ onEnter }: { onEnter: () => void }) {
+interface Props {
+  cardsAreReady: boolean;
+  onEnter: () => void;
+}
+
+export default function StartScreen({ cardsAreReady, onEnter }: Props) {
   return (
     <div className="min-h-screen flex items-center justify-center p-6 animate-in fade-in duration-300">
       <div className="w-full max-w-sm prayer-card flex flex-col items-center text-center py-12">
@@ -12,10 +17,20 @@ export default function StartScreen({ onEnter }: { onEnter: () => void }) {
         <button 
           type="button"
           onClick={onEnter}
-          className="px-10 py-3 border-2 border-black text-black font-semibold tracking-widest active:bg-black/5 transition-colors"
+          disabled={!cardsAreReady}
+          className={`px-10 py-3 border-2 font-semibold tracking-widest transition-colors ${
+            cardsAreReady
+              ? 'border-black text-black active:bg-black/5'
+              : 'cursor-not-allowed border-black/20 text-black/35'
+          }`}
         >
-          ENTER
+          {cardsAreReady ? 'ENTER' : '카드 준비 중'}
         </button>
+        {!cardsAreReady && (
+          <p className="mt-5 text-sm text-black/55 break-keep">
+            기도카드를 준비하고 있습니다.
+          </p>
+        )}
       </div>
     </div>
   );

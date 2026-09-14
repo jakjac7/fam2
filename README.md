@@ -20,3 +20,7 @@ npm run lint
 npm run build
 npm run preview
 ```
+
+## 기도카드 내용 관리
+
+카드의 이름, 말씀, 기도제목은 [PrayerCards.md](PrayerCards.md)에만 작성합니다. 실제 카드가 3장 이상 있어야 앱에서 무작위 기도카드를 시작할 수 있습니다.

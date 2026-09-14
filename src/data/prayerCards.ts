@@ -1,125 +1,39 @@
+import prayerCardsMarkdown from '../../PrayerCards.md?raw';
 import type { PrayerCard } from '../types';
 
-// Mock data for MVP
-export const PRAYER_CARDS: PrayerCard[] = [
-  {
-    id: "L001",
-    name: "김믿음",
-    cell: "소망셀",
-    verseReference: "시편 23:1",
-    verseText: "여호와는 나의 목자시니 내게 부족함이 없으리로다",
-    prayers: [
-      "가족 모두가 영육 간에 강건하도록",
-      "맡겨진 사역을 기쁨으로 감당하도록",
-      "직장에서 선한 영향력을 끼치도록"
-    ]
-  },
-  {
-    id: "L002",
-    name: "이소망",
-    cell: "사랑셀",
-    verseReference: "빌립보서 4:13",
-    verseText: "내게 능력 주시는 자 안에서 내가 모든 것을 할 수 있느니라",
-    prayers: [
-      "새롭게 시작하는 학업에 지혜를 주시도록",
-      "셀원들을 사랑으로 섬길 수 있는 넉넉한 마음을 주시도록"
-    ]
-  },
-  {
-    id: "L003",
-    name: "박사랑",
-    cell: "믿음셀",
-    verseReference: "잠언 3:5-6",
-    verseText: "너는 마음을 다하여 여호와를 신뢰하고 네 명철을 의지하지 말라 너는 범사에 그를 인정하라 그리하면 네 길을 지도하시리라",
-    prayers: [
-      "매일 말씀을 묵상하는 습관이 세워지도록",
-      "부모님의 건강을 지켜주시도록",
-      "캠프를 통해 깊은 은혜를 경험하도록"
-    ]
-  },
-  {
-    id: "L004",
-    name: "최은혜",
-    cell: "은혜셀",
-    verseReference: "요한복음 14:27",
-    verseText: "평안을 너희에게 끼치노니 곧 나의 평안을 너희에게 주노라 내가 너희에게 주는 것은 세상이 주는 것과 같지 아니하니라",
-    prayers: [
-      "마음에 늘 평안이 가득하도록",
-      "남편의 사업이 안정되게 이끌어 주시도록"
-    ]
-  },
-  {
-    id: "L005",
-    name: "정평강",
-    cell: "화평셀",
-    verseReference: "이사야 41:10",
-    verseText: "두려워하지 말라 내가 너와 함께 함이라 놀라지 말라 나는 네 하나님이 됨이라",
-    prayers: [
-      "자녀들의 진로를 선하게 인도해 주시도록",
-      "재정적인 어려움이 지혜롭게 해결되도록",
-      "늘 기도하는 어머니가 되도록"
-    ]
-  },
-  {
-    id: "L006",
-    name: "강기쁨",
-    cell: "희락셀",
-    verseReference: "로마서 8:28",
-    verseText: "우리가 알거니와 하나님을 사랑하는 자 곧 그의 뜻대로 부르심을 입은 자들에게는 모든 것이 합력하여 선을 이루느니라",
-    prayers: [
-      "언제나 기뻐하며 감사하는 삶을 살도록",
-      "새로운 일터에서 좋은 동역자들을 만나도록"
-    ]
-  },
-  {
-    id: "L007",
-    name: "조온유",
-    cell: "온유셀",
-    verseReference: "마태복음 11:29",
-    verseText: "나는 마음이 온유하고 겸손하니 나의 멍에를 메고 내게 배우라 그리하면 너희 마음이 쉼을 얻으리니",
-    prayers: [
-      "예수님의 온유한 성품을 닮아가도록",
-      "관계의 어려움이 있는 지체들과 화해하도록",
-      "가정에 예배가 회복되도록"
-    ]
-  },
-  {
-    id: "L008",
-    name: "윤충성",
-    cell: "충성셀",
-    verseReference: "갈라디아서 6:9",
-    verseText: "우리가 선을 행하되 낙심하지 말지니 포기하지 아니하면 때가 이르매 거두리라",
-    prayers: [
-      "끝까지 충성된 일꾼으로 쓰임받도록",
-      "지치지 않는 체력과 영력을 허락하시도록"
-    ]
-  },
-  {
-    id: "L009",
-    name: "임겸손",
-    cell: "겸손셀",
-    verseReference: "야고보서 4:6",
-    verseText: "그러나 더욱 큰 은혜를 주시나니 그러므로 일렀으되 하나님이 교만한 자를 물리치시고 겸손한 자에게 은혜를 주신다 하였느니라",
-    prayers: [
-      "늘 겸손한 태도로 이웃을 섬기도록",
-      "배우자를 위한 기도가 응답되도록",
-      "캠프에서 리더로서 본을 보이도록"
-    ]
-  },
-  {
-    id: "L010",
-    name: "한진리",
-    cell: "진리셀",
-    verseReference: "요한복음 8:32",
-    verseText: "진리를 알지니 진리가 너희를 자유롭게 하리라",
-    prayers: [
-      "말씀의 깊은 진리를 깨달아 알도록",
-      "세상의 유혹에 흔들리지 않는 믿음을 주시도록"
-    ]
-  }
-];
+export const CARDS_PER_ROUND = 3;
 
-/** Fast, single-source lookup used when rendering a selected card. */
+/**
+ * Reads the actual card-display section of PrayerCards.md at build time.
+ * The TypeScript reference section in that document is intentionally ignored.
+ */
+export function parsePrayerCards(markdown: string): PrayerCard[] {
+  const [cardSection] = markdown.split(/^#\s+웹 입력용 TypeScript\s*$/m);
+  const headingPattern = /^##\s+(\d+)\.\s+(.+?)\s*$/gm;
+  const headings = [...cardSection.matchAll(headingPattern)];
+
+  return headings.map((heading, index) => {
+    const headingText = heading[2].trim();
+    const identity = headingText.match(/^(.*?)\s+\((.+)\)$/);
+    const start = (heading.index ?? 0) + heading[0].length;
+    const end = headings[index + 1]?.index ?? cardSection.length;
+    const body = cardSection.slice(start, end);
+    const prayers = body
+      .split(/\r?\n/)
+      .map((line) => line.match(/^\s*\d+\.\s+(.+)$/)?.[1]?.trim())
+      .filter((item): item is string => Boolean(item));
+
+    return {
+      id: `leader-${heading[1].padStart(3, '0')}`,
+      name: identity?.[1]?.trim() ?? headingText,
+      cell: identity?.[2]?.trim(),
+      prayers,
+    } satisfies PrayerCard;
+  }).filter((card) => card.prayers.length > 0);
+}
+
+export const PRAYER_CARDS = parsePrayerCards(prayerCardsMarkdown);
+
 export const PRAYER_CARD_BY_ID = new Map(
   PRAYER_CARDS.map((card) => [card.id, card] as const),
 );
