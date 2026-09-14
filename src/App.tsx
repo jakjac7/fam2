@@ -1,5 +1,5 @@
 import { useAppState } from './hooks/useAppState';
-import { PRAYER_CARDS } from './data/prayerCards';
+import { PRAYER_CARD_BY_ID } from './data/prayerCards';
 import StartScreen from './screens/StartScreen';
 import ConsentScreen from './screens/ConsentScreen';
 import PrayerCardScreen from './screens/PrayerCardScreen';
@@ -15,17 +15,17 @@ export default function App() {
     replaceCurrentCard, 
     completePrayer,
     prayMore,
-    updateState
+    beginConsent
   } = useAppState();
 
-  const currentCard = PRAYER_CARDS.find(c => c.id === state.selectedCardIds[state.currentCardIndex]);
+  const currentCard = PRAYER_CARD_BY_ID.get(state.selectedCardIds[state.currentCardIndex]);
 
   return (
     <main className="w-full relative selection:bg-black/10">
       <PrivacyGuard />
       
       {state.screen === 'start' && (
-        <StartScreen onEnter={() => updateState({ screen: 'consent' })} />
+        <StartScreen onEnter={beginConsent} />
       )}
 
       {state.screen === 'consent' && (

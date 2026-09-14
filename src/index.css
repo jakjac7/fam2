@@ -18,6 +18,12 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+button:focus-visible,
+input:focus-visible {
+  outline: 3px solid #665B4B;
+  outline-offset: 3px;
+}
+
 /* --- Privacy & Copy Protection --- */
 .prayer-card, .privacy-protected {
   user-select: none;
@@ -26,9 +32,7 @@ body {
 }
 
 @media print {
-  .prayer-content {
-    display: none !important;
-  }
+  #root { display: none !important; }
   
   body::after {
     content: "기도카드는 인쇄할 수 없습니다.";
@@ -38,6 +42,17 @@ body {
     height: 100vh;
     font-size: 1.5rem;
     color: var(--ink);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
   }
 }
 

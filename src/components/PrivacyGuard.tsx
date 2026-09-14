@@ -10,7 +10,7 @@ export default function PrivacyGuard() {
       }
     };
 
-    const handleBlur = () => {
+    const coverScreen = () => {
       setIsCovered(true);
     };
     
@@ -22,7 +22,8 @@ export default function PrivacyGuard() {
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('blur', handleBlur);
+    window.addEventListener('blur', coverScreen);
+    window.addEventListener('pagehide', coverScreen);
     document.addEventListener('contextmenu', preventAction);
     document.addEventListener('copy', preventAction);
     document.addEventListener('cut', preventAction);
@@ -30,7 +31,8 @@ export default function PrivacyGuard() {
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('blur', handleBlur);
+      window.removeEventListener('blur', coverScreen);
+      window.removeEventListener('pagehide', coverScreen);
       document.removeEventListener('contextmenu', preventAction);
       document.removeEventListener('copy', preventAction);
       document.removeEventListener('cut', preventAction);
@@ -46,15 +48,16 @@ export default function PrivacyGuard() {
         <h2 className="card-title text-3xl font-bold tracking-tighter">THE BEAUTY OF GOD</h2>
         
         <p className="text-lg leading-relaxed text-[#34322F]">
-          기도카드 보호를 위해<br/>
-          화면을 잠시 가렸습니다.
+          다른 앱이나 탭으로 이동해<br/>
+          카드 내용을 가렸습니다.
         </p>
 
         <button 
+          type="button"
           onClick={() => setIsCovered(false)}
           className="mt-4 px-8 py-3 bg-[#222222] text-[#FFFDF8] text-base font-medium active:scale-95 transition-transform"
         >
-          다시 보기
+          카드 다시 보기
         </button>
       </div>
     </div>

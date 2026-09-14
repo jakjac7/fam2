@@ -1,4 +1,4 @@
-import { PrayerCard } from '../types';
+import type { PrayerCard } from '../types';
 
 // Mock data for MVP
 export const PRAYER_CARDS: PrayerCard[] = [
@@ -118,3 +118,8 @@ export const PRAYER_CARDS: PrayerCard[] = [
     ]
   }
 ];
+
+/** Fast, single-source lookup used when rendering a selected card. */
+export const PRAYER_CARD_BY_ID = new Map(
+  PRAYER_CARDS.map((card) => [card.id, card] as const),
+);

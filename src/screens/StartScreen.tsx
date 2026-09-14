@@ -10,6 +10,7 @@ export default function StartScreen({ onEnter }: { onEnter: () => void }) {
         </p>
 
         <button 
+          type="button"
           onClick={onEnter}
           className="px-10 py-3 border-2 border-black text-black font-semibold tracking-widest active:bg-black/5 transition-colors"
         >
