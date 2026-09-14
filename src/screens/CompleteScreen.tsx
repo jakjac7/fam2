@@ -10,6 +10,7 @@ export default function CompleteScreen({ onPrayMore }: { onPrayMore: () => void 
         </p>
 
         <button 
+          type="button"
           onClick={onPrayMore}
           className="mt-10 px-6 py-3 border border-black/30 text-black/80 font-semibold tracking-wide active:bg-black/5 transition-colors"
         >

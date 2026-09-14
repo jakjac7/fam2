@@ -1,15 +1,19 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 export default function ConsentScreen({ onConsent }: { onConsent: () => void }) {
   const [agreed, setAgreed] = useState(false);
 
   const handleAgree = () => {
+    if (agreed) return;
     setAgreed(true);
-    // Add slight delay for natural transition
-    setTimeout(() => {
-      onConsent();
-    }, 400);
   };
+
+  useEffect(() => {
+    if (!agreed) return;
+
+    const transitionTimer = window.setTimeout(onConsent, 400);
+    return () => window.clearTimeout(transitionTimer);
+  }, [agreed, onConsent]);
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
@@ -27,7 +31,9 @@ export default function ConsentScreen({ onConsent }: { onConsent: () => void }) 
         </div>
 
         <button 
+          type="button"
           onClick={handleAgree}
+          disabled={agreed}
           className={`flex items-center justify-center gap-3 py-4 border-2 transition-all ${
             agreed 
               ? 'bg-black border-black text-white' 
@@ -35,7 +41,7 @@ export default function ConsentScreen({ onConsent }: { onConsent: () => void }) 
           }`}
         >
           <span className="text-xl leading-none">{agreed ? '☑' : '□'}</span>
-          <span className="font-semibold tracking-wide">동의합니다</span>
+          <span className="font-semibold tracking-wide">{agreed ? '동의했습니다' : '동의합니다'}</span>
         </button>
 
       </div>

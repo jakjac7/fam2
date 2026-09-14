@@ -5,6 +5,9 @@ import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
   return {
+    // This is a project site, not a user site. GitHub Pages serves it at
+    // https://jakjac7.github.io/fam2/, so generated asset URLs need this base.
+    base: '/fam2/',
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
@@ -17,6 +20,10 @@ export default defineConfig(() => {
       hmr: process.env.DISABLE_HMR !== 'true',
       // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
+    },
+    build: {
+      // The production bundle does not need a separate source-map artifact.
+      sourcemap: false,
     },
   };
 });

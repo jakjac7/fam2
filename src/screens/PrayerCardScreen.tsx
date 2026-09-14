@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { PrayerCard } from '../types';
+import type { PrayerCard } from '../types';
 
 interface Props {
   card: PrayerCard;
@@ -21,7 +21,7 @@ export default function PrayerCardScreen({
   onComplete 
 }: Props) {
   const [isSelf, setIsSelf] = useState(false);
-  const isLast = currentIndex === 2;
+  const isLast = currentIndex === visitedCards.length - 1;
   const canComplete = visitedCards.every(Boolean);
 
   const handleReplace = () => {
@@ -44,12 +44,13 @@ export default function PrayerCardScreen({
         {/* Navigation */}
         <div className="flex justify-between items-center mb-4 px-2">
           <span className="text-sm font-semibold tracking-wide text-black/60">
-            기도카드 0{currentIndex + 1}
+            기도카드 {String(currentIndex + 1).padStart(2, '0')}
           </span>
           <div className="flex gap-2">
-            {[0, 1, 2].map((idx) => (
+            {visitedCards.map((_, idx) => (
               <button
                 key={idx}
+                type="button"
                 onClick={() => onNavigate(idx)}
                 className={`w-8 h-8 rounded-full flex items-center justify-center text-sm transition-colors ${
                   currentIndex === idx 
@@ -127,6 +128,7 @@ export default function PrayerCardScreen({
             </label>
             <button
               onClick={handleReplace}
+              type="button"
               disabled={!isSelf}
               className={`text-sm px-4 py-2 border transition-colors ${
                 isSelf 
@@ -148,6 +150,7 @@ export default function PrayerCardScreen({
           {!isLast ? (
             <button
               onClick={onNext}
+              type="button"
               className="w-full py-4 bg-transparent border-2 border-black text-black font-semibold text-lg active:bg-black/5 transition-colors flex items-center justify-center gap-2"
             >
               다음 기도카드 <span>→</span>
@@ -161,6 +164,7 @@ export default function PrayerCardScreen({
               )}
               <button
                 onClick={onComplete}
+                type="button"
                 disabled={!canComplete}
                 className={`w-full py-4 font-semibold text-lg transition-colors ${
                   canComplete
