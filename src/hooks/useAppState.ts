@@ -1,10 +1,14 @@
 import { useEffect, useState } from 'react';
 import type { AppState, ScreenType } from '../types';
-import { PRAYER_CARD_BY_ID, PRAYER_CARDS } from '../data/prayerCards';
+import {
+  CARDS_PER_ROUND,
+  PRAYER_CARD_BY_ID,
+  PRAYER_CARDS,
+} from '../data/prayerCards';
 import { drawUniqueCardIds } from '../domain/drawCards';
 
 const SESSION_KEY = 'prayer_app_state';
-const CARD_COUNT = 3;
+const CARD_COUNT = CARDS_PER_ROUND;
 const SCREENS: ScreenType[] = ['start', 'consent', 'prayer', 'complete'];
 
 function createInitialState(): AppState {
@@ -40,7 +44,13 @@ function hasValidStoredState(value: unknown): value is AppState {
   }
 
   if (state.screen === 'start' || state.screen === 'consent') {
-    return !state.consented && hasEmptySelection && hasVisitedCards && state.currentCardIndex === 0;
+    return (
+      !state.consented &&
+      hasEmptySelection &&
+      hasVisitedCards &&
+      state.currentCardIndex === 0 &&
+      (state.screen !== 'consent' || PRAYER_CARDS.length >= CARD_COUNT)
+    );
   }
 
   return (
@@ -82,6 +92,8 @@ export function useAppState() {
   };
 
   const handleConsent = () => {
+    if (PRAYER_CARDS.length < CARD_COUNT) return;
+
     const ids = createRound();
     setState((current) => {
       // A second tap should preserve the first draw rather than replace it.
