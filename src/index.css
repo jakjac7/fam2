@@ -1,0 +1,82 @@
+@import "tailwindcss";
+
+:root {
+  --page-bg: #DDD7CC;
+  --paper: #F8F2E7;
+  --ink: #222222;
+  --muted: #777168;
+  --border: #34322F;
+  --surface: #FFFDF8;
+}
+
+body {
+  font-family: "Pretendard", system-ui, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-size: 16px;
+  line-height: 1.65;
+  background-color: var(--page-bg);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* --- Privacy & Copy Protection --- */
+.prayer-card, .privacy-protected {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+@media print {
+  .prayer-content {
+    display: none !important;
+  }
+  
+  body::after {
+    content: "기도카드는 인쇄할 수 없습니다.";
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    font-size: 1.5rem;
+    color: var(--ink);
+  }
+}
+
+/* --- Card Visuals --- */
+.prayer-card {
+  position: relative;
+  background: var(--paper);
+  border: 1px solid var(--border);
+  padding: 32px 24px 36px;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04);
+}
+
+.prayer-card::before {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border: 1px solid rgba(52, 50, 47, 0.4);
+  pointer-events: none;
+}
+
+.card-title {
+  font-family: "Playfair Display", "Times New Roman", Times, serif;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.rule {
+  border-top: 1px dashed rgba(35,35,35,0.25);
+}
+
+.prayer-item {
+  font-size: 1.08rem;
+  line-height: 1.75;
+  color: var(--ink);
+}
+
+/* Safe area for mobile */
+.sticky-amen {
+  padding-bottom: calc(24px + env(safe-area-inset-bottom));
+}
