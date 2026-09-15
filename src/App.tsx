@@ -72,7 +72,9 @@ function PrayerExperience({
           watermark={`${drawDate} · 기도 전용 · 외부 공유 금지`}
         />
       )}
-      {state.screen === 'complete' && <CompleteScreen onPrayMore={prayMore} name={state.prayerName} />}
+      {state.screen === 'complete' && (
+        <CompleteScreen onPrayMore={prayMore} name={state.prayerName} drawDate={drawDate} />
+      )}
     </main>
   );
 }

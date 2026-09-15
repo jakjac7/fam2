@@ -1,45 +1,103 @@
 import { useState } from 'react';
 
-const SHARE_TITLE = '가족캠프2 기도카드';
-const SHARE_TEXT = '가족캠프2 리더들을 위한 기도에 함께해주세요.';
+function createAmenImage(name: string, drawDate: string): Promise<File> {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1080;
+  canvas.height = 1350;
+  const context = canvas.getContext('2d');
+  if (!context) return Promise.reject(new Error('이미지 생성에 실패했습니다.'));
 
-function publicPrayerPageUrl() {
-  return new URL(import.meta.env.BASE_URL, window.location.origin).toString();
+  context.fillStyle = '#DDD7CC';
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.fillStyle = '#F8F2E7';
+  context.fillRect(80, 100, 920, 1150);
+  context.strokeStyle = '#34322F';
+  context.lineWidth = 3;
+  context.strokeRect(80, 100, 920, 1150);
+  context.globalAlpha = 0.45;
+  context.lineWidth = 2;
+  context.strokeRect(98, 118, 884, 1114);
+  context.globalAlpha = 1;
+
+  context.fillStyle = '#222222';
+  context.textAlign = 'center';
+  context.font = 'bold 118px Georgia, serif';
+  context.fillText('AMEN', 540, 410);
+
+  context.font = '600 48px Pretendard, "Apple SD Gothic Neo", sans-serif';
+  context.fillText(`${name || '기도자'}님,`, 540, 570);
+  context.font = '500 45px Pretendard, "Apple SD Gothic Neo", sans-serif';
+  context.fillText('세 분의 리더를 위해', 540, 655);
+  context.fillText('함께 기도했습니다.', 540, 725);
+
+  context.strokeStyle = 'rgba(34, 34, 34, 0.22)';
+  context.lineWidth = 2;
+  context.beginPath();
+  context.moveTo(270, 835);
+  context.lineTo(810, 835);
+  context.stroke();
+
+  context.fillStyle = 'rgba(34, 34, 34, 0.55)';
+  context.font = '600 24px Pretendard, "Apple SD Gothic Neo", sans-serif';
+  context.fillText(drawDate.replaceAll('-', '.'), 540, 920);
+  context.fillStyle = 'rgba(34, 34, 34, 0.45)';
+  context.font = '600 25px Pretendard, "Apple SD Gothic Neo", sans-serif';
+  context.fillText('POD CHURCH', 540, 1090);
+
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        reject(new Error('이미지 생성에 실패했습니다.'));
+        return;
+      }
+      resolve(new File([blob], `amen-prayer-${drawDate}.png`, { type: 'image/png' }));
+    }, 'image/png');
+  });
 }
 
-export default function CompleteScreen({ onPrayMore, name }: { onPrayMore: () => void; name: string }) {
+function downloadImage(image: File) {
+  const imageUrl = URL.createObjectURL(image);
+  const link = document.createElement('a');
+  link.href = imageUrl;
+  link.download = image.name;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(imageUrl), 0);
+}
+
+export default function CompleteScreen({
+  onPrayMore,
+  name,
+  drawDate,
+}: {
+  onPrayMore: () => void;
+  name: string;
+  drawDate: string;
+}) {
   const [shareStatus, setShareStatus] = useState('');
-  const shareUrl = publicPrayerPageUrl();
+  const [isPreparingImage, setIsPreparingImage] = useState(false);
 
-  const copyLink = async () => {
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-      setShareStatus('링크를 복사했어요.');
-    } catch {
-      setShareStatus('링크 복사에 실패했어요. 브라우저 메뉴에서 공유해주세요.');
-    }
-  };
-
-  const share = async () => {
-    if (!navigator.share) {
-      await copyLink();
-      return;
-    }
+  const shareAmenImage = async () => {
+    if (isPreparingImage) return;
+    setIsPreparingImage(true);
+    setShareStatus('');
 
     try {
-      await navigator.share({ title: SHARE_TITLE, text: SHARE_TEXT, url: shareUrl });
-      setShareStatus('');
+      const image = await createAmenImage(name, drawDate);
+      const shareData: ShareData = { files: [image] };
+      if (navigator.share && (!navigator.canShare || navigator.canShare(shareData))) {
+        await navigator.share(shareData);
+      } else {
+        downloadImage(image);
+        setShareStatus('이미지를 저장했어요. 공유 앱에서 이 이미지를 선택해주세요.');
+      }
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') return;
-      await copyLink();
+      setShareStatus('이미지를 공유하지 못했습니다. 잠시 후 다시 시도해주세요.');
+    } finally {
+      setIsPreparingImage(false);
     }
-  };
-
-  const openSocialShare = (service: 'x' | 'facebook') => {
-    const targetUrl = service === 'x'
-      ? `https://x.com/intent/post?text=${encodeURIComponent(SHARE_TEXT)}&url=${encodeURIComponent(shareUrl)}`
-      : `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`;
-    window.open(targetUrl, '_blank', 'noopener,noreferrer');
   };
 
   return (
@@ -53,40 +111,18 @@ export default function CompleteScreen({ onPrayMore, name }: { onPrayMore: () =>
         </p>
 
         <div className="mt-9 w-full border-t border-black/15 pt-7">
-          <p className="mb-3 text-sm font-semibold text-black/65">기도로 함께할 분에게 알려주세요</p>
+          <p className="mb-3 text-sm font-semibold text-black/65">기도 완료 이미지를 공유해주세요</p>
           <button
             type="button"
-            onClick={() => void share()}
-            className="w-full bg-black py-3.5 text-base font-semibold text-white active:scale-[0.98] transition-transform"
+            onClick={() => void shareAmenImage()}
+            disabled={isPreparingImage}
+            className="w-full bg-black py-3.5 text-base font-semibold text-white active:scale-[0.98] transition-transform disabled:bg-black/45"
           >
-            공유하기
+            {isPreparingImage ? '이미지를 준비하는 중…' : 'AMEN 이미지 공유하기'}
           </button>
           <p className="mt-3 text-xs leading-relaxed text-black/50 break-keep">
-            휴대폰에서는 카카오톡·인스타그램 등 설치된 앱을 선택할 수 있어요.
+            기도카드의 내용·이름은 포함하지 않습니다. 휴대폰 공유 메뉴에서 카카오톡, 인스타그램, X, Facebook 등을 선택할 수 있어요.
           </p>
-          <div className="mt-4 grid grid-cols-3 gap-2">
-            <button
-              type="button"
-              onClick={() => openSocialShare('x')}
-              className="border border-black/25 py-2 text-sm font-semibold text-black/75 active:bg-black/5"
-            >
-              X
-            </button>
-            <button
-              type="button"
-              onClick={() => openSocialShare('facebook')}
-              className="border border-black/25 py-2 text-sm font-semibold text-black/75 active:bg-black/5"
-            >
-              Facebook
-            </button>
-            <button
-              type="button"
-              onClick={() => void copyLink()}
-              className="border border-black/25 py-2 text-sm font-semibold text-black/75 active:bg-black/5"
-            >
-              링크 복사
-            </button>
-          </div>
           {shareStatus && <p className="mt-3 text-xs font-medium text-black/60" role="status">{shareStatus}</p>}
         </div>
 
