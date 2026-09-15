@@ -2,6 +2,14 @@ name: Deploy Firebase Backend
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'functions/**'
+      - 'firestore.rules'
+      - 'firebase.json'
+      - '.github/workflows/deploy-firebase-backend.yml'
 
 permissions:
   contents: read
