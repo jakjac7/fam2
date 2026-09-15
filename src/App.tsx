@@ -4,6 +4,7 @@ import { CARDS_PER_ROUND } from './data/prayerCards';
 import { normalizePrayerCards } from './data/prayerCards';
 import { usePrayerAccess } from './hooks/usePrayerAccess';
 import { replaceDailyPrayerCard } from './lib/firebase';
+import type { PrayerCard } from './types';
 import StartScreen from './screens/StartScreen';
 import ConsentScreen from './screens/ConsentScreen';
 import PrayerCardScreen from './screens/PrayerCardScreen';
@@ -16,7 +17,7 @@ function PrayerExperience({
   cards,
   drawDate,
 }: {
-  cards: Parameters<typeof useAppState>[0];
+  cards: PrayerCard[];
   drawDate: string;
 }) {
   const [roundCards, setRoundCards] = useState(cards);
