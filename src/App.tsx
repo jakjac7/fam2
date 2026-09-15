@@ -1,6 +1,9 @@
+import { useEffect, useState } from 'react';
 import { useAppState } from './hooks/useAppState';
 import { CARDS_PER_ROUND } from './data/prayerCards';
+import { normalizePrayerCards } from './data/prayerCards';
 import { usePrayerAccess } from './hooks/usePrayerAccess';
+import { replaceDailyPrayerCard } from './lib/firebase';
 import StartScreen from './screens/StartScreen';
 import ConsentScreen from './screens/ConsentScreen';
 import PrayerCardScreen from './screens/PrayerCardScreen';
@@ -16,6 +19,8 @@ function PrayerExperience({
   cards: Parameters<typeof useAppState>[0];
   drawDate: string;
 }) {
+  const [roundCards, setRoundCards] = useState(cards);
+  useEffect(() => setRoundCards(cards), [cards, drawDate]);
   const {
     state,
     handleConsent,
@@ -24,10 +29,20 @@ function PrayerExperience({
     completePrayer,
     prayMore,
     beginConsent,
-  } = useAppState(cards, drawDate);
-  const cardById = new Map(cards.map((card) => [card.id, card] as const));
+    replaceCurrentCard,
+  } = useAppState(roundCards, drawDate);
+  const cardById = new Map(roundCards.map((card) => [card.id, card] as const));
   const currentCard = cardById.get(state.selectedCardIds[state.currentCardIndex]);
   const cardsAreReady = cards.length >= CARDS_PER_ROUND;
+
+  const handleReplace = async () => {
+    if (!currentCard) return;
+    const result = await replaceDailyPrayerCard(currentCard.id);
+    const [replacement] = normalizePrayerCards([result.card]);
+    if (!replacement) throw new Error('교체할 기도카드를 준비하지 못했습니다.');
+    setRoundCards((current) => [...current.filter((card) => card.id !== replacement.id), replacement]);
+    replaceCurrentCard(replacement.id);
+  };
 
   return (
     <main className="w-full relative selection:bg-black/10">
@@ -48,10 +63,11 @@ function PrayerExperience({
           onNavigate={navigateToCard}
           onNext={nextCard}
           onComplete={completePrayer}
+          onReplace={handleReplace}
           watermark={`${drawDate} · 기도 전용 · 외부 공유 금지`}
         />
       )}
-      {state.screen === 'complete' && <CompleteScreen onPrayMore={prayMore} />}
+      {state.screen === 'complete' && <CompleteScreen onPrayMore={prayMore} name={state.prayerName} />}
     </main>
   );
 }

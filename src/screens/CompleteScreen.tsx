@@ -1,11 +1,11 @@
-export default function CompleteScreen({ onPrayMore }: { onPrayMore: () => void }) {
+export default function CompleteScreen({ onPrayMore, name }: { onPrayMore: () => void; name: string }) {
   return (
     <div className="min-h-screen flex items-center justify-center p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="w-full max-w-sm prayer-card flex flex-col items-center text-center py-16">
         <h1 className="card-title text-5xl mb-8">AMEN</h1>
         
         <p className="text-lg leading-relaxed text-black/85 font-medium break-keep">
-          세 분의 리더를 위해<br/>
+          {name ? `${name}님, ` : ''}세 분의 리더를 위해<br/>
           함께 기도해 주셔서 감사합니다.
         </p>
 

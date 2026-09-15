@@ -11,6 +11,7 @@ function createInitialState(): AppState {
   return {
     screen: 'start',
     consented: false,
+    prayerName: '',
     selectedCardIds: [],
     currentCardIndex: 0,
     visitedCards: Array(CARD_COUNT).fill(false),
@@ -39,7 +40,12 @@ function hasValidStoredState(
   const validScreen =
     typeof state.screen === 'string' && SCREENS.includes(state.screen as ScreenType);
 
-  if (!validScreen || typeof state.consented !== 'boolean' || !Number.isInteger(state.currentCardIndex)) {
+  if (
+    !validScreen ||
+    typeof state.consented !== 'boolean' ||
+    (state.prayerName !== undefined && typeof state.prayerName !== 'string') ||
+    !Number.isInteger(state.currentCardIndex)
+  ) {
     return false;
   }
 
@@ -93,8 +99,11 @@ export function useAppState(cards: PrayerCard[], roundKey: string) {
     setState((current) => ({ ...current, screen: 'consent' }));
   };
 
-  const handleConsent = () => {
+  const handleConsent = (prayerName: string) => {
     if (cards.length < CARD_COUNT) return;
+
+    const normalizedName = prayerName.trim();
+    if (!normalizedName) return;
 
     const ids = createRound(cards);
     setState((current) => {
@@ -103,6 +112,7 @@ export function useAppState(cards: PrayerCard[], roundKey: string) {
         return {
           ...current,
           consented: true,
+          prayerName: normalizedName,
           screen: 'prayer',
           visitedCards: [true, ...current.visitedCards.slice(1)],
         };
@@ -110,6 +120,7 @@ export function useAppState(cards: PrayerCard[], roundKey: string) {
 
       return {
         consented: true,
+        prayerName: normalizedName,
         screen: 'prayer',
         selectedCardIds: ids,
         currentCardIndex: 0,
@@ -151,6 +162,23 @@ export function useAppState(cards: PrayerCard[], roundKey: string) {
     }));
   };
 
+  const replaceCurrentCard = (replacementId: string) => {
+    setState((current) => {
+      const { currentCardIndex } = current;
+      if (current.selectedCardIds.includes(replacementId)) return current;
+
+      return {
+        ...current,
+        selectedCardIds: current.selectedCardIds.map((cardId, index) =>
+          index === currentCardIndex ? replacementId : cardId,
+        ),
+        visitedCards: current.visitedCards.map((visited, index) =>
+          index === currentCardIndex ? true : visited,
+        ),
+      };
+    });
+  };
+
   return {
     state,
     beginConsent,
@@ -158,6 +186,7 @@ export function useAppState(cards: PrayerCard[], roundKey: string) {
     navigateToCard,
     nextCard,
     completePrayer,
-    prayMore
+    prayMore,
+    replaceCurrentCard,
   };
 }
