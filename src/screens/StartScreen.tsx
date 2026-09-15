@@ -1,9 +1,10 @@
 interface Props {
   cardsAreReady: boolean;
+  drawDate: string;
   onEnter: () => void;
 }
 
-export default function StartScreen({ cardsAreReady, onEnter }: Props) {
+export default function StartScreen({ cardsAreReady, drawDate, onEnter }: Props) {
   return (
     <div className="min-h-screen flex items-center justify-center p-6 animate-in fade-in duration-300">
       <div className="w-full max-w-sm prayer-card flex flex-col items-center text-center py-12">
@@ -12,6 +13,10 @@ export default function StartScreen({ cardsAreReady, onEnter }: Props) {
         <p className="text-lg mb-12 text-black/80 font-medium">
           가족캠프2 리더<br/>
           기도카드 나눔
+        </p>
+
+        <p className="-mt-8 mb-8 text-xs tracking-[0.18em] text-black/50">
+          TODAY&apos;S 3 · {drawDate.replaceAll('-', '.')}
         </p>
 
         <button 
@@ -31,6 +36,7 @@ export default function StartScreen({ cardsAreReady, onEnter }: Props) {
             기도카드를 준비하고 있습니다.
           </p>
         )}
+
       </div>
     </div>
   );

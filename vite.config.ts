@@ -3,11 +3,16 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import {defineConfig} from 'vite';
 
+function deploymentBasePath() {
+  const configured = process.env.VITE_BASE_PATH?.trim();
+  if (!configured || configured === '/') return '/';
+  return `/${configured.replace(/^\/+|\/+$/g, '')}/`;
+}
+
 export default defineConfig(() => {
   return {
-    // This is a project site, not a user site. GitHub Pages serves it at
-    // https://jakjac7.github.io/fam2/, so generated asset URLs need this base.
-    base: '/fam2/',
+    // Firebase Hosting is served at /; GitHub Pages passes /fam2/ explicitly.
+    base: deploymentBasePath(),
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
