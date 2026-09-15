@@ -9,6 +9,7 @@ interface Props {
   onNext: () => void;
   onComplete: () => void;
   onReplace: () => Promise<void>;
+  canReplace: boolean;
   watermark: string;
 }
 
@@ -20,6 +21,7 @@ export default function PrayerCardScreen({
   onNext, 
   onComplete,
   onReplace,
+  canReplace,
   watermark,
 }: Props) {
   const isLast = currentIndex === visitedCards.length - 1;
@@ -30,6 +32,7 @@ export default function PrayerCardScreen({
 
   useEffect(() => {
     setIsMyCard(false);
+    setIsReplacing(false);
     setReplacementError('');
   }, [card.id]);
 
@@ -134,29 +137,31 @@ export default function PrayerCardScreen({
 
         {/* Action Bottom */}
         <div className="sticky-amen flex flex-col gap-3">
-          <div className="rounded-sm border border-black/15 bg-white/35 px-4 py-3">
-            <label className="flex cursor-pointer items-center gap-3 text-sm font-medium text-black/75">
-              <input
-                type="checkbox"
-                checked={isMyCard}
-                disabled={isReplacing}
-                onChange={(event) => setIsMyCard(event.target.checked)}
-                className="h-4 w-4 accent-black"
-              />
-              본인 카드입니다
-            </label>
-            {isMyCard && (
-              <button
-                type="button"
-                onClick={() => void handleReplace()}
-                disabled={isReplacing}
-                className="mt-3 w-full border border-black/35 py-2.5 text-sm font-semibold text-black active:bg-black/5 disabled:text-black/35"
-              >
-                {isReplacing ? '다른 기도카드를 준비하는 중…' : '다른 기도카드로 교체하기'}
-              </button>
-            )}
-            {replacementError && <p className="mt-2 text-xs text-red-700">{replacementError}</p>}
-          </div>
+          {canReplace && (
+            <div className="rounded-sm border border-black/15 bg-white/35 px-4 py-3">
+              <label className="flex cursor-pointer items-center gap-3 text-sm font-medium text-black/75">
+                <input
+                  type="checkbox"
+                  checked={isMyCard}
+                  disabled={isReplacing}
+                  onChange={(event) => setIsMyCard(event.target.checked)}
+                  className="h-4 w-4 accent-black"
+                />
+                본인 카드입니다
+              </label>
+              {isMyCard && (
+                <button
+                  type="button"
+                  onClick={() => void handleReplace()}
+                  disabled={isReplacing}
+                  className="mt-3 w-full border border-black/35 py-2.5 text-sm font-semibold text-black active:bg-black/5 disabled:text-black/35"
+                >
+                  {isReplacing ? '다른 기도카드를 준비하는 중…' : '다른 기도카드로 교체하기'}
+                </button>
+              )}
+              {replacementError && <p className="mt-2 text-xs text-red-700">{replacementError}</p>}
+            </div>
+          )}
           {!isLast ? (
             <button
               onClick={onNext}

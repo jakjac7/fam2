@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAppState } from './hooks/useAppState';
 import { CARDS_PER_ROUND } from './data/prayerCards';
 import { normalizePrayerCards } from './data/prayerCards';
@@ -35,6 +35,7 @@ function PrayerExperience({
   const cardById = new Map<string, PrayerCard>(
     roundCards.map((card) => [card.id, card] as const),
   );
+  const dailyCardIds = useMemo(() => new Set(cards.map((card) => card.id)), [cards]);
   const currentCard = cardById.get(state.selectedCardIds[state.currentCardIndex]);
   const cardsAreReady = cards.length >= CARDS_PER_ROUND;
 
@@ -67,6 +68,7 @@ function PrayerExperience({
           onNext={nextCard}
           onComplete={completePrayer}
           onReplace={handleReplace}
+          canReplace={dailyCardIds.has(currentCard.id)}
           watermark={`${drawDate} · 기도 전용 · 외부 공유 금지`}
         />
       )}
