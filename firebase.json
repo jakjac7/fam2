@@ -28,6 +28,13 @@
     ],
     "rewrites": [
       {
+        "source": "/amen-download",
+        "function": {
+          "functionId": "downloadAmenImage",
+          "region": "asia-northeast3"
+        }
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 function createAmenImage(name: string, drawDate: string): Promise<File> {
   const canvas = document.createElement('canvas');
@@ -72,12 +72,7 @@ export default function CompleteScreen({
   const [amenImage, setAmenImage] = useState<File | null>(null);
   const [isPreparingImage, setIsPreparingImage] = useState(true);
   const [isSharing, setIsSharing] = useState(false);
-  const downloadUrlRef = useRef<string | null>(null);
   const isKakaoTalkInApp = /KAKAOTALK/i.test(navigator.userAgent);
-
-  useEffect(() => () => {
-    if (downloadUrlRef.current) URL.revokeObjectURL(downloadUrlRef.current);
-  }, []);
 
   // Build the certificate before the tap. In-app browsers can revoke the
   // click's user activation after an async canvas operation, which prevents
@@ -110,17 +105,17 @@ export default function CompleteScreen({
 
     try {
       if (isKakaoTalkInApp) {
-        if (downloadUrlRef.current) URL.revokeObjectURL(downloadUrlRef.current);
-        const imageUrl = URL.createObjectURL(amenImage);
-        downloadUrlRef.current = imageUrl;
+        const downloadUrl = new URL('/amen-download', window.location.origin);
+        downloadUrl.searchParams.set('name', name || '기도자');
+        downloadUrl.searchParams.set('date', drawDate);
         const downloadLink = document.createElement('a');
-        downloadLink.href = imageUrl;
-        downloadLink.download = amenImage.name;
+        downloadLink.href = downloadUrl.toString();
+        downloadLink.download = `amen-prayer-${drawDate}.png`;
         downloadLink.style.display = 'none';
         document.body.appendChild(downloadLink);
         downloadLink.click();
         downloadLink.remove();
-        setShareStatus('다운로드를 요청했습니다. 카카오톡의 다운로드 폴더에서 확인해 주세요.');
+        setShareStatus('인증 이미지를 다운로드하는 중…');
         return;
       }
 
