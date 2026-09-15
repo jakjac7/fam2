@@ -68,6 +68,7 @@ export default function CompleteScreen({
   const [amenImage, setAmenImage] = useState<File | null>(null);
   const [isPreparingImage, setIsPreparingImage] = useState(true);
   const [isSharing, setIsSharing] = useState(false);
+  const isKakaoTalkInApp = /KAKAOTALK/i.test(navigator.userAgent);
 
   // Build the certificate before the tap. In-app browsers can revoke the
   // click's user activation after an async canvas operation, which prevents
@@ -99,6 +100,20 @@ export default function CompleteScreen({
     setShareStatus('');
 
     try {
+      if (isKakaoTalkInApp) {
+        const imageUrl = URL.createObjectURL(amenImage);
+        const downloadLink = document.createElement('a');
+        downloadLink.href = imageUrl;
+        downloadLink.download = amenImage.name;
+        downloadLink.style.display = 'none';
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        downloadLink.remove();
+        window.setTimeout(() => URL.revokeObjectURL(imageUrl), 1000);
+        setShareStatus('인증 이미지를 다운로드했습니다. 카카오톡에서 이 이미지를 선택해 공유해 주세요.');
+        return;
+      }
+
       const shareData: ShareData = {
         files: [amenImage],
       };
@@ -123,6 +138,7 @@ export default function CompleteScreen({
   return (
     <div className="min-h-screen flex items-center justify-center p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="w-full max-w-sm prayer-card flex flex-col items-center text-center py-16">
+        <p className="mb-5 text-xs font-semibold tracking-[0.16em] text-black/45">{drawDate}</p>
         <h1 className="card-title text-5xl mb-8">AMEN</h1>
         
         <p className="text-lg leading-relaxed text-black/85 font-medium break-keep">
@@ -145,10 +161,16 @@ export default function CompleteScreen({
             disabled={isPreparingImage || isSharing || !amenImage}
             className="w-full bg-black py-3.5 text-base font-semibold text-white active:scale-[0.98] transition-transform disabled:bg-black/45"
           >
-            {isPreparingImage ? '인증 이미지를 준비하는 중…' : isSharing ? '공유 창을 여는 중…' : '공유할게요'}
+            {isPreparingImage
+              ? '인증 이미지를 준비하는 중…'
+              : isSharing
+                ? isKakaoTalkInApp ? '다운로드를 준비하는 중…' : '공유 창을 여는 중…'
+                : isKakaoTalkInApp ? '인증 이미지 다운로드' : '공유할게요'}
           </button>
           <p className="mt-3 text-xs leading-relaxed text-black/50 break-keep">
-            인증 이미지를 바로 공유합니다. 기도카드의 내용·이름은 이미지와 링크 미리보기에 포함하지 않습니다.
+            {isKakaoTalkInApp
+              ? '카카오톡 인앱 브라우저에서는 인증 이미지를 다운로드합니다.'
+              : '인증 이미지를 바로 공유합니다. 기도카드의 내용·이름은 이미지와 링크 미리보기에 포함하지 않습니다.'}
           </p>
           {shareStatus && <p className="mt-3 text-xs font-medium text-black/60" role="status">{shareStatus}</p>}
         </div>
