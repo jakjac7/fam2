@@ -32,7 +32,9 @@ function PrayerExperience({
     beginConsent,
     replaceCurrentCard,
   } = useAppState(roundCards, drawDate);
-  const cardById = new Map(roundCards.map((card) => [card.id, card] as const));
+  const cardById = new Map<string, PrayerCard>(
+    roundCards.map((card) => [card.id, card] as const),
+  );
   const currentCard = cardById.get(state.selectedCardIds[state.currentCardIndex]);
   const cardsAreReady = cards.length >= CARDS_PER_ROUND;
 
