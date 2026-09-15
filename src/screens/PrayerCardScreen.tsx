@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import type { PrayerCard } from '../types';
 
 interface Props {
@@ -7,8 +6,8 @@ interface Props {
   visitedCards: boolean[];
   onNavigate: (index: number) => void;
   onNext: () => void;
-  onReplace: () => void;
   onComplete: () => void;
+  watermark: string;
 }
 
 export default function PrayerCardScreen({ 
@@ -17,17 +16,11 @@ export default function PrayerCardScreen({
   visitedCards, 
   onNavigate, 
   onNext, 
-  onReplace, 
-  onComplete 
+  onComplete,
+  watermark,
 }: Props) {
-  const [isSelf, setIsSelf] = useState(false);
   const isLast = currentIndex === visitedCards.length - 1;
   const canComplete = visitedCards.every(Boolean);
-
-  const handleReplace = () => {
-    setIsSelf(false);
-    onReplace();
-  };
 
   return (
     <div className="min-h-screen flex flex-col items-center py-6 px-4 animate-in fade-in duration-300">
@@ -35,7 +28,7 @@ export default function PrayerCardScreen({
       {/* Watermark */}
       <div className="fixed inset-0 pointer-events-none flex items-center justify-center opacity-[0.02] z-0 overflow-hidden">
         <div className="rotate-[-30deg] text-4xl font-bold whitespace-nowrap text-black">
-          기도 전용 · 외부 공유 금지
+          {watermark}
         </div>
       </div>
 
@@ -113,31 +106,6 @@ export default function PrayerCardScreen({
                 </li>
               ))}
             </ul>
-          </div>
-
-          {/* Self Replacement */}
-          <div className="mt-12 flex flex-col items-end gap-3">
-            <label className="flex items-center gap-2 text-sm text-black/70 cursor-pointer">
-              <input 
-                type="checkbox" 
-                checked={isSelf}
-                onChange={(e) => setIsSelf(e.target.checked)}
-                className="w-4 h-4 accent-black"
-              />
-              본인의 기도카드인가요?
-            </label>
-            <button
-              onClick={handleReplace}
-              type="button"
-              disabled={!isSelf}
-              className={`text-sm px-4 py-2 border transition-colors ${
-                isSelf 
-                  ? 'border-black text-black hover:bg-black/5' 
-                  : 'border-transparent text-black/30'
-              }`}
-            >
-              다른 기도카드 받기
-            </button>
           </div>
 
           <div className="mt-8 text-center text-xs tracking-widest font-semibold text-black/40">

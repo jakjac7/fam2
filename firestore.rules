@@ -1,0 +1,11 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Prayer cards, approval records, and draws can only be accessed through
+    // the authenticated Cloud Function using the Admin SDK.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

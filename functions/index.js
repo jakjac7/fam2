@@ -1,0 +1,97 @@
+import { randomInt } from 'node:crypto';
+import { initializeApp } from 'firebase-admin/app';
+import { FieldValue, getFirestore } from 'firebase-admin/firestore';
+import { setGlobalOptions } from 'firebase-functions/v2';
+import { HttpsError, onCall } from 'firebase-functions/v2/https';
+
+initializeApp();
+setGlobalOptions({ region: 'asia-northeast3', maxInstances: 10 });
+
+const db = getFirestore();
+const CARDS_PER_ROUND = 3;
+const KOREA_TIME_ZONE = 'Asia/Seoul';
+
+function koreaCalendarDate() {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: KOREA_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+  const byType = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${byType.year}-${byType.month}-${byType.day}`;
+}
+
+function pickUniqueCards(cards, count) {
+  const available = [...cards];
+  for (let index = available.length - 1; index > 0; index -= 1) {
+    const selectedIndex = randomInt(index + 1);
+    [available[index], available[selectedIndex]] = [available[selectedIndex], available[index]];
+  }
+  return available.slice(0, count);
+}
+
+function asPrayerCard(snapshot) {
+  const card = snapshot.data();
+  return {
+    id: snapshot.id,
+    name: card.name,
+    cell: card.cell ?? undefined,
+    verseReference: card.verseReference ?? undefined,
+    verseText: card.verseText ?? undefined,
+    prayers: Array.isArray(card.prayers) ? card.prayers.filter((prayer) => typeof prayer === 'string') : [],
+  };
+}
+
+/**
+ * Returns the same three cards to every visitor during one Korea calendar day,
+ * then safely creates a new random draw the next day. Firestore Rules deny all
+ * browser reads; the function only exposes the three selected cards.
+ */
+export const getDailyPrayerCards = onCall({
+  cors: [
+    'https://fam2-prayer-cards.web.app',
+    'https://fam2-prayer-cards.firebaseapp.com',
+    'https://jakjac7.github.io',
+  ],
+}, async () => {
+  const drawDate = koreaCalendarDate();
+  const drawRef = db.collection('dailyPrayerDraws').doc(drawDate);
+  const assignedCards = await db.runTransaction(async (transaction) => {
+    const existingDraw = await transaction.get(drawRef);
+    if (existingDraw.exists) {
+      const cardIds = existingDraw.data().cardIds;
+      if (Array.isArray(cardIds) && cardIds.length === CARDS_PER_ROUND) {
+        const snapshots = await Promise.all(
+          cardIds.map((cardId) => transaction.get(db.collection('prayerCards').doc(cardId))),
+        );
+        if (snapshots.every((snapshot) => snapshot.exists)) return snapshots;
+      }
+    }
+
+    const activeCards = await transaction.get(
+      db.collection('prayerCards').where('active', '==', true),
+    );
+    if (activeCards.size < CARDS_PER_ROUND) {
+      throw new HttpsError('failed-precondition', '기도카드가 충분히 준비되지 않았습니다.');
+    }
+
+    const chosenCards = pickUniqueCards(activeCards.docs, CARDS_PER_ROUND);
+    transaction.set(drawRef, {
+      cardIds: chosenCards.map((card) => card.id),
+      drawDate,
+      assignedAt: FieldValue.serverTimestamp(),
+    });
+    return chosenCards;
+  });
+
+  const cards = assignedCards.map(asPrayerCard);
+  if (cards.some((card) => !card.name || card.prayers.length === 0)) {
+    throw new HttpsError('failed-precondition', '기도카드 데이터 형식이 올바르지 않습니다.');
+  }
+
+  return {
+    cards,
+    drawDate,
+  };
+});

@@ -14,7 +14,7 @@ export default function CompleteScreen({ onPrayMore }: { onPrayMore: () => void 
           onClick={onPrayMore}
           className="mt-10 px-6 py-3 border border-black/30 text-black/80 font-semibold tracking-wide active:bg-black/5 transition-colors"
         >
-          좀 더 기도할게요
+          같은 세 분을 다시 기도할게요
         </button>
 
         <div className="mt-12 text-xs tracking-widest font-semibold text-black/40">

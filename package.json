@@ -9,9 +9,11 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "tsc --noEmit",
-    "check": "npm run lint && npm run build"
+    "check": "npm run lint && npm run build",
+    "import:prayer-cards": "npm --prefix functions run import:prayer-cards --"
   },
   "dependencies": {
+    "firebase": "12.19.0",
     "react": "^19.0.1",
     "react-dom": "^19.0.1"
   },
