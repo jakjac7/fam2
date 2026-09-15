@@ -99,18 +99,21 @@ export default function CompleteScreen({
   }, [drawDate, name]);
 
   const shareAmenImage = async () => {
-    if (isPreparingImage || isSharing || !amenImage) return;
+    // KakaoTalk's in-app browser downloads the certificate from the server,
+    // so it does not need to wait for the client-side share image to finish.
+    if (isPreparingImage || isSharing || (!isKakaoTalkInApp && !amenImage)) return;
     setIsSharing(true);
     setShareStatus('');
 
     try {
       if (isKakaoTalkInApp) {
-        const downloadUrl = new URL('/amen-download', window.location.origin);
+        const downloadUrl = new URL(
+          'https://asia-northeast3-fam2-prayer-cards.cloudfunctions.net/downloadAmenImage',
+        );
         downloadUrl.searchParams.set('name', name || '기도자');
         downloadUrl.searchParams.set('date', drawDate);
         const downloadLink = document.createElement('a');
         downloadLink.href = downloadUrl.toString();
-        downloadLink.download = `amen-prayer-${drawDate}.png`;
         downloadLink.style.display = 'none';
         document.body.appendChild(downloadLink);
         downloadLink.click();
