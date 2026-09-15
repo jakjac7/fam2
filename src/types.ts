@@ -12,6 +12,7 @@ export interface PrayerCard {
 export interface AppState {
   screen: ScreenType;
   consented: boolean;
+  prayerName: string;
   selectedCardIds: string[];
   currentCardIndex: number;
   visitedCards: boolean[];

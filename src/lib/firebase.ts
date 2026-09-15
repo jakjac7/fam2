@@ -15,6 +15,10 @@ export interface DailyPrayerCardsResult {
   drawDate: string;
 }
 
+export interface PrayerCardReplacementResult {
+  card: FirebasePrayerCard;
+}
+
 function envValue(value: string | undefined): string | null {
   const trimmed = value?.trim();
   return trimmed ? trimmed : null;
@@ -50,4 +54,17 @@ export async function getDailyPrayerCards(): Promise<DailyPrayerCardsResult> {
   if (!firebaseServices) throw new Error('Firebase 공개 설정이 누락되었습니다.');
   const getCards = httpsCallable<void, DailyPrayerCardsResult>(firebaseServices.functions, 'getDailyPrayerCards');
   return (await getCards()).data;
+}
+
+/**
+ * Exchanges one of today's three cards for its server-selected alternative.
+ * The browser never receives the full private card collection.
+ */
+export async function replaceDailyPrayerCard(cardId: string): Promise<PrayerCardReplacementResult> {
+  if (!firebaseServices) throw new Error('Firebase 공개 설정이 누락되었습니다.');
+  const replaceCard = httpsCallable<{ cardId: string }, PrayerCardReplacementResult>(
+    firebaseServices.functions,
+    'replaceDailyPrayerCard',
+  );
+  return (await replaceCard({ cardId })).data;
 }

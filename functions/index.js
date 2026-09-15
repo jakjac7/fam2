@@ -48,6 +48,16 @@ function asPrayerCard(snapshot) {
   };
 }
 
+function isActiveCard(card) {
+  return card.get('active') === true || card.get('active') === 'true';
+}
+
+function isValidCardIdList(value) {
+  return Array.isArray(value)
+    && value.length === CARDS_PER_ROUND
+    && value.every((cardId) => typeof cardId === 'string' && cardId);
+}
+
 /**
  * Returns the same three cards to every visitor during one Korea calendar day,
  * then safely creates a new random draw the next day. Firestore Rules deny all
@@ -66,7 +76,7 @@ export const getDailyPrayerCards = onCall({
     const existingDraw = await transaction.get(drawRef);
     if (existingDraw.exists) {
       const cardIds = existingDraw.data().cardIds;
-      if (Array.isArray(cardIds) && cardIds.length === CARDS_PER_ROUND) {
+      if (isValidCardIdList(cardIds)) {
         const snapshots = await Promise.all(
           cardIds.map((cardId) => transaction.get(db.collection('prayerCards').doc(cardId))),
         );
@@ -75,7 +85,7 @@ export const getDailyPrayerCards = onCall({
     }
 
     const allCards = await transaction.get(db.collection('prayerCards'));
-    const activeCards = allCards.docs.filter((card) => card.get('active') === true || card.get('active') === 'true');
+    const activeCards = allCards.docs.filter(isActiveCard);
     if (activeCards.length < CARDS_PER_ROUND) {
       throw new HttpsError('failed-precondition', '기도카드가 충분히 준비되지 않았습니다.');
     }
@@ -98,4 +108,71 @@ export const getDailyPrayerCards = onCall({
     cards,
     drawDate,
   };
+});
+
+/**
+ * Gives each of today's three cards one fixed alternative. This permits a
+ * visitor to skip their own card without making the private collection
+ * enumerable from the browser.
+ */
+export const replaceDailyPrayerCard = onCall({
+  cors: [
+    'https://fam2-prayer-cards.web.app',
+    'https://fam2-prayer-cards.firebaseapp.com',
+    'https://jakjac7.github.io',
+  ],
+}, async (request) => {
+  const cardId = request.data?.cardId;
+  if (typeof cardId !== 'string' || !cardId) {
+    throw new HttpsError('invalid-argument', '교체할 기도카드를 확인하지 못했습니다.');
+  }
+
+  const drawDate = koreaCalendarDate();
+  const drawRef = db.collection('dailyPrayerDraws').doc(drawDate);
+  const replacementSnapshot = await db.runTransaction(async (transaction) => {
+    const existingDraw = await transaction.get(drawRef);
+    if (!existingDraw.exists || !isValidCardIdList(existingDraw.data().cardIds)) {
+      throw new HttpsError('failed-precondition', '오늘의 기도카드를 먼저 준비해주세요.');
+    }
+
+    const assignedCardIds = existingDraw.data().cardIds;
+    const assignedIndex = assignedCardIds.indexOf(cardId);
+    if (assignedIndex < 0) {
+      throw new HttpsError('failed-precondition', '오늘 배정된 기도카드만 교체할 수 있습니다.');
+    }
+
+    let replacementCardIds = existingDraw.data().replacementCardIds;
+    let generatedReplacementCardIds = null;
+    if (!isValidCardIdList(replacementCardIds)) {
+      const allCards = await transaction.get(db.collection('prayerCards'));
+      const availableCards = allCards.docs.filter(
+        (card) => isActiveCard(card) && !assignedCardIds.includes(card.id),
+      );
+      if (availableCards.length < CARDS_PER_ROUND) {
+        throw new HttpsError('failed-precondition', '교체할 기도카드가 충분히 준비되지 않았습니다.');
+      }
+
+      replacementCardIds = pickUniqueCards(availableCards, CARDS_PER_ROUND).map((card) => card.id);
+      generatedReplacementCardIds = replacementCardIds;
+    }
+
+    const snapshot = await transaction.get(
+      db.collection('prayerCards').doc(replacementCardIds[assignedIndex]),
+    );
+    if (generatedReplacementCardIds) {
+      transaction.set(drawRef, { replacementCardIds: generatedReplacementCardIds }, { merge: true });
+    }
+    return snapshot;
+  });
+
+  if (!replacementSnapshot.exists) {
+    throw new HttpsError('failed-precondition', '교체할 기도카드를 준비하지 못했습니다.');
+  }
+
+  const card = asPrayerCard(replacementSnapshot);
+  if (!card.name || card.prayers.length === 0) {
+    throw new HttpsError('failed-precondition', '기도카드 데이터 형식이 올바르지 않습니다.');
+  }
+
+  return { card };
 });

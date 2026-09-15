@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import type { PrayerCard } from '../types';
 
 interface Props {
@@ -7,6 +8,7 @@ interface Props {
   onNavigate: (index: number) => void;
   onNext: () => void;
   onComplete: () => void;
+  onReplace: () => Promise<void>;
   watermark: string;
 }
 
@@ -17,10 +19,31 @@ export default function PrayerCardScreen({
   onNavigate, 
   onNext, 
   onComplete,
+  onReplace,
   watermark,
 }: Props) {
   const isLast = currentIndex === visitedCards.length - 1;
   const canComplete = visitedCards.every(Boolean);
+  const [isMyCard, setIsMyCard] = useState(false);
+  const [isReplacing, setIsReplacing] = useState(false);
+  const [replacementError, setReplacementError] = useState('');
+
+  useEffect(() => {
+    setIsMyCard(false);
+    setReplacementError('');
+  }, [card.id]);
+
+  const handleReplace = async () => {
+    if (!isMyCard || isReplacing) return;
+    setIsReplacing(true);
+    setReplacementError('');
+    try {
+      await onReplace();
+    } catch {
+      setReplacementError('카드를 교체하지 못했습니다. 잠시 후 다시 시도해주세요.');
+      setIsReplacing(false);
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col items-center py-6 px-4 animate-in fade-in duration-300">
@@ -66,21 +89,19 @@ export default function PrayerCardScreen({
           <h2 className="card-title text-2xl text-center mb-8">THE BEAUTY OF GOD</h2>
           
           {/* Header */}
-          <div className="flex justify-between items-end mb-6">
-            <div className="flex items-baseline gap-3">
-              <span className="text-sm font-semibold text-black/50">이름</span>
-              <span className="text-xl font-bold tracking-widest">{card.name}</span>
+          <div className="flex flex-col gap-3 mb-8">
+            <div className="flex items-baseline justify-between gap-4">
+              <span className="text-[0.7rem] font-bold tracking-[0.16em] text-black/45">PRAY FOR</span>
+              {card.cell && (
+                <span className="rounded-full border border-black/15 bg-white/35 px-2.5 py-1 text-xs font-medium text-black/65">{card.cell}</span>
+              )}
             </div>
-            {card.cell && (
-              <span className="text-sm text-black/70">({card.cell})</span>
-            )}
+            <span className="text-2xl font-bold leading-snug tracking-tight break-keep">{card.name}</span>
           </div>
-          
-          <div className="rule mb-6"></div>
 
           {/* Verse */}
           {card.verseText && (
-            <div className="mb-6 space-y-2">
+            <div className="mb-8 rounded-sm bg-black/[0.035] px-4 py-4 space-y-2">
               <div className="text-sm font-semibold text-black/50">약속의 말씀</div>
               <div className="text-base leading-relaxed break-keep font-serif">
                 “{card.verseText}”
@@ -93,11 +114,9 @@ export default function PrayerCardScreen({
             </div>
           )}
 
-          <div className="rule mb-6"></div>
-
           {/* Prayers */}
           <div className="flex-1">
-            <div className="text-sm font-semibold text-black/50 mb-4">기도제목</div>
+            <div className="text-xs font-bold tracking-[0.16em] text-black/50 mb-5">PRAYER POINTS</div>
             <ul className="space-y-5">
               {card.prayers.map((prayer, idx) => (
                 <li key={idx} className="flex gap-3 prayer-item break-keep">
@@ -115,6 +134,29 @@ export default function PrayerCardScreen({
 
         {/* Action Bottom */}
         <div className="sticky-amen flex flex-col gap-3">
+          <div className="rounded-sm border border-black/15 bg-white/35 px-4 py-3">
+            <label className="flex cursor-pointer items-center gap-3 text-sm font-medium text-black/75">
+              <input
+                type="checkbox"
+                checked={isMyCard}
+                disabled={isReplacing}
+                onChange={(event) => setIsMyCard(event.target.checked)}
+                className="h-4 w-4 accent-black"
+              />
+              본인 카드입니다
+            </label>
+            {isMyCard && (
+              <button
+                type="button"
+                onClick={() => void handleReplace()}
+                disabled={isReplacing}
+                className="mt-3 w-full border border-black/35 py-2.5 text-sm font-semibold text-black active:bg-black/5 disabled:text-black/35"
+              >
+                {isReplacing ? '다른 기도카드를 준비하는 중…' : '다른 기도카드로 교체하기'}
+              </button>
+            )}
+            {replacementError && <p className="mt-2 text-xs text-red-700">{replacementError}</p>}
+          </div>
           {!isLast ? (
             <button
               onClick={onNext}
