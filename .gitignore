@@ -11,3 +11,5 @@ firebase-debug.log
 firebase-debug.*.log
 *service-account*.json
 *firebase-adminsdk-*.json
+# Private source used only for one-time Firestore import.
+PrayerCards.md
