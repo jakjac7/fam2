@@ -33,13 +33,18 @@ function pickUniqueCards(cards, count) {
 
 function asPrayerCard(snapshot) {
   const card = snapshot.data();
+  const prayers = Array.isArray(card.prayers)
+    ? card.prayers.filter((prayer) => typeof prayer === 'string')
+    : typeof card.prayers === 'string'
+      ? card.prayers.split(/\r?\n/).map((prayer) => prayer.trim()).filter(Boolean)
+      : [];
   return {
     id: snapshot.id,
     name: card.name,
     cell: card.cell ?? undefined,
     verseReference: card.verseReference ?? undefined,
     verseText: card.verseText ?? undefined,
-    prayers: Array.isArray(card.prayers) ? card.prayers.filter((prayer) => typeof prayer === 'string') : [],
+    prayers,
   };
 }
 
@@ -69,14 +74,13 @@ export const getDailyPrayerCards = onCall({
       }
     }
 
-    const activeCards = await transaction.get(
-      db.collection('prayerCards').where('active', '==', true),
-    );
-    if (activeCards.size < CARDS_PER_ROUND) {
+    const allCards = await transaction.get(db.collection('prayerCards'));
+    const activeCards = allCards.docs.filter((card) => card.get('active') === true || card.get('active') === 'true');
+    if (activeCards.length < CARDS_PER_ROUND) {
       throw new HttpsError('failed-precondition', '기도카드가 충분히 준비되지 않았습니다.');
     }
 
-    const chosenCards = pickUniqueCards(activeCards.docs, CARDS_PER_ROUND);
+    const chosenCards = pickUniqueCards(activeCards, CARDS_PER_ROUND);
     transaction.set(drawRef, {
       cardIds: chosenCards.map((card) => card.id),
       drawDate,
