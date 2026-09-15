@@ -58,6 +58,77 @@ function isValidCardIdList(value) {
     && value.every((cardId) => typeof cardId === 'string' && cardId);
 }
 
+function isCalendarDate(value) {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function calendarDaysBefore(date, days) {
+  const calendarDate = new Date(`${date}T00:00:00Z`);
+  calendarDate.setUTCDate(calendarDate.getUTCDate() - days);
+  return calendarDate.toISOString().slice(0, 10);
+}
+
+function drawDetails(snapshot) {
+  const draw = snapshot.data();
+  const drawDate = isCalendarDate(draw.drawDate)
+    ? draw.drawDate
+    : isCalendarDate(snapshot.id)
+      ? snapshot.id
+      : null;
+  return {
+    drawDate,
+    cardIds: isValidCardIdList(draw.cardIds) ? draw.cardIds : [],
+  };
+}
+
+function buildSelectionHistory(drawSnapshots, beforeDate) {
+  const recentDates = new Set(
+    Array.from({ length: 5 }, (_, index) => calendarDaysBefore(beforeDate, index + 1)),
+  );
+  const recentCardIds = new Set();
+  const history = new Map();
+
+  for (const snapshot of drawSnapshots) {
+    const { drawDate, cardIds } = drawDetails(snapshot);
+    if (!drawDate || drawDate >= beforeDate) continue;
+
+    for (const cardId of cardIds) {
+      if (recentDates.has(drawDate)) recentCardIds.add(cardId);
+
+      const previous = history.get(cardId) ?? { count: 0, lastSelectedDate: '' };
+      history.set(cardId, {
+        count: previous.count + 1,
+        lastSelectedDate: previous.lastSelectedDate > drawDate ? previous.lastSelectedDate : drawDate,
+      });
+    }
+  }
+
+  return { history, recentCardIds };
+}
+
+function chooseFairCards(activeCards, drawSnapshots, drawDate, excludedCardIds = new Set()) {
+  const { history, recentCardIds } = buildSelectionHistory(drawSnapshots, drawDate);
+  const eligibleCards = activeCards.filter(
+    (card) => !recentCardIds.has(card.id) && !excludedCardIds.has(card.id),
+  );
+  if (eligibleCards.length < CARDS_PER_ROUND) {
+    throw new HttpsError(
+      'failed-precondition',
+      '최근 5일을 제외하고 추출할 기도카드가 충분하지 않습니다.',
+    );
+  }
+
+  // Shuffle only breaks complete ties; the fairness priority remains fixed.
+  return pickUniqueCards(eligibleCards, eligibleCards.length)
+    .sort((left, right) => {
+      const leftHistory = history.get(left.id) ?? { count: 0, lastSelectedDate: '' };
+      const rightHistory = history.get(right.id) ?? { count: 0, lastSelectedDate: '' };
+      if (leftHistory.count !== rightHistory.count) return leftHistory.count - rightHistory.count;
+      return leftHistory.lastSelectedDate.localeCompare(rightHistory.lastSelectedDate);
+    })
+    .slice(0, CARDS_PER_ROUND);
+}
+
 /**
  * Returns the same three cards to every visitor during one Korea calendar day,
  * then safely creates a new random draw the next day. Firestore Rules deny all
@@ -84,13 +155,16 @@ export const getDailyPrayerCards = onCall({
       }
     }
 
-    const allCards = await transaction.get(db.collection('prayerCards'));
+    const [allCards, allDraws] = await Promise.all([
+      transaction.get(db.collection('prayerCards')),
+      transaction.get(db.collection('dailyPrayerDraws')),
+    ]);
     const activeCards = allCards.docs.filter(isActiveCard);
     if (activeCards.length < CARDS_PER_ROUND) {
       throw new HttpsError('failed-precondition', '기도카드가 충분히 준비되지 않았습니다.');
     }
 
-    const chosenCards = pickUniqueCards(activeCards, CARDS_PER_ROUND);
+    const chosenCards = chooseFairCards(activeCards, allDraws.docs, drawDate);
     transaction.set(drawRef, {
       cardIds: chosenCards.map((card) => card.id),
       drawDate,
@@ -144,15 +218,15 @@ export const replaceDailyPrayerCard = onCall({
     let replacementCardIds = existingDraw.data().replacementCardIds;
     let generatedReplacementCardIds = null;
     if (!isValidCardIdList(replacementCardIds)) {
-      const allCards = await transaction.get(db.collection('prayerCards'));
+      const [allCards, allDraws] = await Promise.all([
+        transaction.get(db.collection('prayerCards')),
+        transaction.get(db.collection('dailyPrayerDraws')),
+      ]);
       const availableCards = allCards.docs.filter(
         (card) => isActiveCard(card) && !assignedCardIds.includes(card.id),
       );
-      if (availableCards.length < CARDS_PER_ROUND) {
-        throw new HttpsError('failed-precondition', '교체할 기도카드가 충분히 준비되지 않았습니다.');
-      }
 
-      replacementCardIds = pickUniqueCards(availableCards, CARDS_PER_ROUND).map((card) => card.id);
+      replacementCardIds = chooseFairCards(availableCards, allDraws.docs, drawDate).map((card) => card.id);
       generatedReplacementCardIds = replacementCardIds;
     }
 
