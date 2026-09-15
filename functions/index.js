@@ -1,8 +1,9 @@
 import { randomInt } from 'node:crypto';
+import sharp from 'sharp';
 import { initializeApp } from 'firebase-admin/app';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { setGlobalOptions } from 'firebase-functions/v2';
-import { HttpsError, onCall } from 'firebase-functions/v2/https';
+import { HttpsError, onCall, onRequest } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 
 initializeApp();
@@ -79,6 +80,38 @@ function isValidCardIdList(value) {
 
 function isCalendarDate(value) {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function escapeSvgText(value) {
+  return value.replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&apos;',
+  })[character]);
+}
+
+function amenCertificateSvg(name, drawDate) {
+  const displayName = escapeSvgText(name || '기도자');
+  const formattedDate = drawDate.replaceAll('-', '.');
+
+  return `
+    <svg width="720" height="900" viewBox="0 0 720 900" xmlns="http://www.w3.org/2000/svg">
+      <rect width="720" height="900" fill="#DDD7CC"/>
+      <rect x="53" y="67" width="614" height="766" fill="#F8F2E7" stroke="#34322F" stroke-width="2"/>
+      <rect x="65" y="79" width="590" height="742" fill="none" stroke="#34322F" stroke-opacity=".45"/>
+      <g fill="#222222" text-anchor="middle">
+        <text x="360" y="273" font-family="Georgia, serif" font-size="79" font-weight="700">AMEN</text>
+        <text x="360" y="380" font-family="Noto Sans KR, Arial, sans-serif" font-size="32" font-weight="600">${displayName}님,</text>
+        <text x="360" y="437" font-family="Noto Sans KR, Arial, sans-serif" font-size="30">세 분의 리더를 위해</text>
+        <text x="360" y="483" font-family="Noto Sans KR, Arial, sans-serif" font-size="30">함께 기도했습니다.</text>
+      </g>
+      <path d="M180 557 H540" stroke="#222222" stroke-opacity=".22" stroke-width="1.5"/>
+      <text x="360" y="613" fill="#222222" fill-opacity=".55" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" font-weight="600">${formattedDate}</text>
+      <text x="360" y="727" fill="#222222" fill-opacity=".45" text-anchor="middle" font-family="Arial, sans-serif" font-size="17" font-weight="600" letter-spacing="2">POD CHURCH</text>
+    </svg>
+  `;
 }
 
 function calendarDaysBefore(date, days) {
@@ -207,6 +240,39 @@ export const getDailyPrayerCards = onCall({
     cards,
     drawDate,
   };
+});
+
+/**
+ * Serves a real PNG attachment for KakaoTalk's in-app browser. Unlike a Blob
+ * URL created in the page, this response is handled by the browser downloader.
+ * The request carries only the voluntary display name and draw date; no prayer
+ * card content is read or stored here.
+ */
+export const downloadAmenImage = onRequest(async (request, response) => {
+  if (request.method !== 'GET') {
+    response.set('Allow', 'GET').status(405).send('Method Not Allowed');
+    return;
+  }
+
+  const requestName = typeof request.query.name === 'string' ? request.query.name.trim() : '';
+  const requestDate = typeof request.query.date === 'string' ? request.query.date : '';
+  const name = requestName.slice(0, 24);
+  const drawDate = isCalendarDate(requestDate) ? requestDate : koreaPrayerRoundDate();
+  const image = await sharp(Buffer.from(amenCertificateSvg(name, drawDate)))
+    .png({ compressionLevel: 9, palette: true })
+    .toBuffer();
+
+  response
+    .status(200)
+    .set({
+      'Content-Type': 'image/png',
+      'Content-Length': String(image.length),
+      'Content-Disposition': `attachment; filename="amen-prayer-${drawDate}.png"`,
+      'Cache-Control': 'private, no-store, max-age=0',
+      'X-Content-Type-Options': 'nosniff',
+      'Referrer-Policy': 'no-referrer',
+    })
+    .send(image);
 });
 
 /** Prepares the next shared three-card round at 20:30 every evening in Korea. */
