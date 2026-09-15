@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 function createAmenImage(name: string, drawDate: string): Promise<File> {
   const canvas = document.createElement('canvas');
@@ -55,17 +55,6 @@ function createAmenImage(name: string, drawDate: string): Promise<File> {
   });
 }
 
-function downloadImage(image: File) {
-  const imageUrl = URL.createObjectURL(image);
-  const link = document.createElement('a');
-  link.href = imageUrl;
-  link.download = image.name;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  window.setTimeout(() => URL.revokeObjectURL(imageUrl), 0);
-}
-
 export default function CompleteScreen({
   onPrayMore,
   name,
@@ -76,27 +65,59 @@ export default function CompleteScreen({
   drawDate: string;
 }) {
   const [shareStatus, setShareStatus] = useState('');
-  const [isPreparingImage, setIsPreparingImage] = useState(false);
+  const [amenImage, setAmenImage] = useState<File | null>(null);
+  const [isPreparingImage, setIsPreparingImage] = useState(true);
+  const [isSharing, setIsSharing] = useState(false);
+
+  // Build the certificate before the tap. In-app browsers can revoke the
+  // click's user activation after an async canvas operation, which prevents
+  // the native share sheet from receiving the image.
+  useEffect(() => {
+    let isCurrent = true;
+    setAmenImage(null);
+    setIsPreparingImage(true);
+
+    void createAmenImage(name, drawDate)
+      .then((image) => {
+        if (isCurrent) setAmenImage(image);
+      })
+      .catch(() => {
+        if (isCurrent) setShareStatus('인증 이미지를 준비하지 못했습니다. 페이지를 새로고침해 다시 시도해 주세요.');
+      })
+      .finally(() => {
+        if (isCurrent) setIsPreparingImage(false);
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [drawDate, name]);
 
   const shareAmenImage = async () => {
-    if (isPreparingImage) return;
-    setIsPreparingImage(true);
+    if (isPreparingImage || isSharing || !amenImage) return;
+    setIsSharing(true);
     setShareStatus('');
 
     try {
-      const image = await createAmenImage(name, drawDate);
-      const shareData: ShareData = { files: [image] };
-      if (navigator.share && (!navigator.canShare || navigator.canShare(shareData))) {
-        await navigator.share(shareData);
-      } else {
-        downloadImage(image);
-        setShareStatus('이미지를 저장했어요. 공유 앱에서 이 이미지를 선택해주세요.');
+      const shareData: ShareData = {
+        files: [amenImage],
+        title: 'THE BEAUTY OF GOD',
+      };
+
+      // Do not preflight with navigator.canShare: some in-app WebViews report
+      // false there but still open their native image share sheet. This must
+      // stay in the click handler so KakaoTalk receives the image directly.
+      if (!navigator.share) {
+        setShareStatus('이 브라우저는 이미지 직접 공유를 지원하지 않습니다. 카카오톡 메뉴에서 다른 브라우저로 열어 다시 공유해 주세요.');
+        return;
       }
+
+      await navigator.share(shareData);
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') return;
-      setShareStatus('이미지를 공유하지 못했습니다. 잠시 후 다시 시도해주세요.');
+      setShareStatus('이미지 직접 공유를 열지 못했습니다. 카카오톡 메뉴에서 다른 브라우저로 열어 다시 시도해 주세요.');
     } finally {
-      setIsPreparingImage(false);
+      setIsSharing(false);
     }
   };
 
@@ -122,13 +143,13 @@ export default function CompleteScreen({
           <button
             type="button"
             onClick={() => void shareAmenImage()}
-            disabled={isPreparingImage}
+            disabled={isPreparingImage || isSharing || !amenImage}
             className="w-full bg-black py-3.5 text-base font-semibold text-white active:scale-[0.98] transition-transform disabled:bg-black/45"
           >
-            {isPreparingImage ? '이미지를 준비하는 중…' : '공유할게요'}
+            {isPreparingImage ? '인증 이미지를 준비하는 중…' : isSharing ? '공유 창을 여는 중…' : '공유할게요'}
           </button>
           <p className="mt-3 text-xs leading-relaxed text-black/50 break-keep">
-            기도카드의 내용·이름은 포함하지 않습니다. 휴대폰 공유 메뉴에서 카카오톡, 인스타그램, X, Facebook 등을 선택할 수 있어요.
+            인증 이미지를 바로 공유합니다. 기도카드의 내용·이름은 이미지와 링크 미리보기에 포함하지 않습니다.
           </p>
           {shareStatus && <p className="mt-3 text-xs font-medium text-black/60" role="status">{shareStatus}</p>}
         </div>
