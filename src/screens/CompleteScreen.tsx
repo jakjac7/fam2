@@ -110,29 +110,28 @@ export default function CompleteScreen({
           함께 기도해 주셔서 감사합니다.
         </p>
 
-        <div className="mt-9 w-full border-t border-black/15 pt-7">
-          <p className="mb-3 text-sm font-semibold text-black/65">기도 완료 이미지를 공유해주세요</p>
+        <button
+          type="button"
+          onClick={onPrayMore}
+          className="mt-9 px-6 py-3 border border-black/30 text-black/80 font-semibold tracking-wide active:bg-black/5 transition-colors"
+        >
+          같은 세 분을 다시 기도할게요
+        </button>
+
+        <div className="mt-4 w-full">
           <button
             type="button"
             onClick={() => void shareAmenImage()}
             disabled={isPreparingImage}
             className="w-full bg-black py-3.5 text-base font-semibold text-white active:scale-[0.98] transition-transform disabled:bg-black/45"
           >
-            {isPreparingImage ? '이미지를 준비하는 중…' : 'AMEN 이미지 공유하기'}
+            {isPreparingImage ? '이미지를 준비하는 중…' : '공유할게요'}
           </button>
           <p className="mt-3 text-xs leading-relaxed text-black/50 break-keep">
             기도카드의 내용·이름은 포함하지 않습니다. 휴대폰 공유 메뉴에서 카카오톡, 인스타그램, X, Facebook 등을 선택할 수 있어요.
           </p>
           {shareStatus && <p className="mt-3 text-xs font-medium text-black/60" role="status">{shareStatus}</p>}
         </div>
-
-        <button
-          type="button"
-          onClick={onPrayMore}
-          className="mt-6 px-6 py-3 border border-black/30 text-black/80 font-semibold tracking-wide active:bg-black/5 transition-colors"
-        >
-          같은 세 분을 다시 기도할게요
-        </button>
 
         <div className="mt-12 text-xs tracking-widest font-semibold text-black/40">
           POD CHURCH

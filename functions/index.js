@@ -3,6 +3,7 @@ import { initializeApp } from 'firebase-admin/app';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { setGlobalOptions } from 'firebase-functions/v2';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
 
 initializeApp();
 setGlobalOptions({ region: 'asia-northeast3', maxInstances: 10 });
@@ -10,16 +11,34 @@ setGlobalOptions({ region: 'asia-northeast3', maxInstances: 10 });
 const db = getFirestore();
 const CARDS_PER_ROUND = 3;
 const KOREA_TIME_ZONE = 'Asia/Seoul';
+const DRAW_HOUR = 20;
+const DRAW_MINUTE = 30;
+const DRAW_SCHEDULE_VERSION = '20:30-kst-v1';
 
-function koreaCalendarDate() {
+function koreaDateTimeParts(now = new Date()) {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: KOREA_TIME_ZONE,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-  }).formatToParts(new Date());
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(now);
   const byType = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${byType.year}-${byType.month}-${byType.day}`;
+  return {
+    date: `${byType.year}-${byType.month}-${byType.day}`,
+    hour: Number(byType.hour),
+    minute: Number(byType.minute),
+  };
+}
+
+function koreaPrayerRoundDate(now = new Date()) {
+  const { date, hour, minute } = koreaDateTimeParts(now);
+  if (hour < DRAW_HOUR || (hour === DRAW_HOUR && minute < DRAW_MINUTE)) {
+    return calendarDaysBefore(date, 1);
+  }
+  return date;
 }
 
 function pickUniqueCards(cards, count) {
@@ -129,30 +148,19 @@ function chooseFairCards(activeCards, drawSnapshots, drawDate, excludedCardIds =
     .slice(0, CARDS_PER_ROUND);
 }
 
-/**
- * Returns the same three cards to every visitor during one Korea calendar day,
- * then safely creates a new random draw the next day. Firestore Rules deny all
- * browser reads; the function only exposes the three selected cards.
- */
-export const getDailyPrayerCards = onCall({
-  cors: [
-    'https://fam2-prayer-cards.web.app',
-    'https://fam2-prayer-cards.firebaseapp.com',
-    'https://jakjac7.github.io',
-  ],
-}, async () => {
-  const drawDate = koreaCalendarDate();
+async function getOrCreateDailyDraw(drawDate, { replaceLegacyDraw = false } = {}) {
   const drawRef = db.collection('dailyPrayerDraws').doc(drawDate);
-  const assignedCards = await db.runTransaction(async (transaction) => {
+  return db.runTransaction(async (transaction) => {
     const existingDraw = await transaction.get(drawRef);
-    if (existingDraw.exists) {
-      const cardIds = existingDraw.data().cardIds;
-      if (isValidCardIdList(cardIds)) {
-        const snapshots = await Promise.all(
-          cardIds.map((cardId) => transaction.get(db.collection('prayerCards').doc(cardId))),
-        );
-        if (snapshots.every((snapshot) => snapshot.exists)) return snapshots;
-      }
+    const existingCardIds = existingDraw.exists ? existingDraw.data().cardIds : null;
+    const wasCreatedForEveningSchedule = existingDraw.exists
+      && existingDraw.data().scheduleVersion === DRAW_SCHEDULE_VERSION;
+
+    if (isValidCardIdList(existingCardIds) && (!replaceLegacyDraw || wasCreatedForEveningSchedule)) {
+      const snapshots = await Promise.all(
+        existingCardIds.map((cardId) => transaction.get(db.collection('prayerCards').doc(cardId))),
+      );
+      if (snapshots.every((snapshot) => snapshot.exists)) return snapshots;
     }
 
     const [allCards, allDraws] = await Promise.all([
@@ -169,9 +177,26 @@ export const getDailyPrayerCards = onCall({
       cardIds: chosenCards.map((card) => card.id),
       drawDate,
       assignedAt: FieldValue.serverTimestamp(),
+      scheduleVersion: DRAW_SCHEDULE_VERSION,
     });
     return chosenCards;
   });
+}
+
+/**
+ * Returns the same three cards to every visitor from 20:30 KST until the next
+ * 20:29 KST. The scheduled function prepares the draw at 20:30; this callable
+ * also creates it as a safe fallback. Firestore Rules deny browser reads.
+ */
+export const getDailyPrayerCards = onCall({
+  cors: [
+    'https://fam2-prayer-cards.web.app',
+    'https://fam2-prayer-cards.firebaseapp.com',
+    'https://jakjac7.github.io',
+  ],
+}, async () => {
+  const drawDate = koreaPrayerRoundDate();
+  const assignedCards = await getOrCreateDailyDraw(drawDate);
 
   const cards = assignedCards.map(asPrayerCard);
   if (cards.some((card) => !card.name || card.prayers.length === 0)) {
@@ -182,6 +207,15 @@ export const getDailyPrayerCards = onCall({
     cards,
     drawDate,
   };
+});
+
+/** Prepares the next shared three-card round at 20:30 every evening in Korea. */
+export const refreshDailyPrayerCards = onSchedule({
+  schedule: '30 20 * * *',
+  timeZone: KOREA_TIME_ZONE,
+}, async () => {
+  const drawDate = koreaPrayerRoundDate();
+  await getOrCreateDailyDraw(drawDate, { replaceLegacyDraw: true });
 });
 
 /**
@@ -201,7 +235,7 @@ export const replaceDailyPrayerCard = onCall({
     throw new HttpsError('invalid-argument', '교체할 기도카드를 확인하지 못했습니다.');
   }
 
-  const drawDate = koreaCalendarDate();
+  const drawDate = koreaPrayerRoundDate();
   const drawRef = db.collection('dailyPrayerDraws').doc(drawDate);
   const replacementSnapshot = await db.runTransaction(async (transaction) => {
     const existingDraw = await transaction.get(drawRef);
