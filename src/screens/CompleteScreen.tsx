@@ -50,8 +50,8 @@ function createAmenImage(name: string, drawDate: string): Promise<File> {
         reject(new Error('이미지 생성에 실패했습니다.'));
         return;
       }
-      resolve(new File([blob], `amen-prayer-${drawDate}.png`, { type: 'image/png' }));
-    }, 'image/png');
+      resolve(new File([blob], `amen-prayer-${drawDate}.jpg`, { type: 'image/jpeg' }));
+    }, 'image/jpeg', 0.92);
   });
 }
 
@@ -101,7 +101,6 @@ export default function CompleteScreen({
     try {
       const shareData: ShareData = {
         files: [amenImage],
-        title: 'THE BEAUTY OF GOD',
       };
 
       // Do not preflight with navigator.canShare: some in-app WebViews report
