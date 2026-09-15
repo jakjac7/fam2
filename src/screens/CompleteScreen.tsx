@@ -72,12 +72,7 @@ export default function CompleteScreen({
   const [amenImage, setAmenImage] = useState<File | null>(null);
   const [isPreparingImage, setIsPreparingImage] = useState(true);
   const [isSharing, setIsSharing] = useState(false);
-  const [downloadImageUrl, setDownloadImageUrl] = useState('');
   const isKakaoTalkInApp = /KAKAOTALK/i.test(navigator.userAgent);
-
-  useEffect(() => () => {
-    if (downloadImageUrl) URL.revokeObjectURL(downloadImageUrl);
-  }, [downloadImageUrl]);
 
   // Build the certificate before the tap. In-app browsers can revoke the
   // click's user activation after an async canvas operation, which prevents
@@ -118,8 +113,8 @@ export default function CompleteScreen({
         document.body.appendChild(downloadLink);
         downloadLink.click();
         downloadLink.remove();
-        setDownloadImageUrl(imageUrl);
-        setShareStatus('다운로드를 시작했습니다. 갤러리에 보이지 않으면 아래 이미지를 길게 눌러 저장해 주세요.');
+        window.setTimeout(() => URL.revokeObjectURL(imageUrl), 1000);
+        setShareStatus('다운로드를 시작했습니다. 카카오톡의 다운로드 폴더에서 확인해 주세요.');
         return;
       }
 
@@ -182,20 +177,6 @@ export default function CompleteScreen({
               : '인증 이미지를 바로 공유합니다. 기도카드의 내용·이름은 이미지와 링크 미리보기에 포함하지 않습니다.'}
           </p>
           {shareStatus && <p className="mt-3 text-xs font-medium text-black/60" role="status">{shareStatus}</p>}
-          {isKakaoTalkInApp && downloadImageUrl && amenImage && (
-            <a
-              href={downloadImageUrl}
-              download={amenImage.name}
-              className="mt-4 block rounded-sm border border-black/15 bg-white/35 p-3"
-            >
-              <img
-                src={downloadImageUrl}
-                alt="저장할 인증 이미지"
-                className="mx-auto max-h-44 w-auto border border-black/10"
-              />
-              <span className="mt-2 block text-xs font-medium text-black/60">이미지가 안 보이면 길게 눌러 저장</span>
-            </a>
-          )}
         </div>
 
         <div className="mt-12 text-xs tracking-widest font-semibold text-black/40">
