@@ -15,6 +15,11 @@ const KOREA_TIME_ZONE = 'Asia/Seoul';
 const DRAW_HOUR = 20;
 const DRAW_MINUTE = 30;
 const DRAW_SCHEDULE_VERSION = '20:30-kst-v1';
+const CALLABLE_CORS = [
+  'https://fam2-prayer-cards.web.app',
+  'https://fam2-prayer-cards.firebaseapp.com',
+  'https://jakjac7.github.io',
+];
 
 function koreaDateTimeParts(now = new Date()) {
   const parts = new Intl.DateTimeFormat('en-US', {
@@ -92,9 +97,10 @@ function escapeSvgText(value) {
   })[character]);
 }
 
-function amenCertificateSvg(name, drawDate) {
+function amenCertificateSvg(name, drawDate, leaderCount) {
   const displayName = escapeSvgText(name || '기도자');
   const formattedDate = drawDate.replaceAll('-', '.');
+  const leaderCountText = leaderCount === 6 ? '여섯 분' : '세 분';
 
   return `
     <svg width="720" height="900" viewBox="0 0 720 900" xmlns="http://www.w3.org/2000/svg">
@@ -104,7 +110,7 @@ function amenCertificateSvg(name, drawDate) {
       <g fill="#222222" text-anchor="middle">
         <text x="360" y="273" font-family="Georgia, serif" font-size="79" font-weight="700">AMEN</text>
         <text x="360" y="380" font-family="Noto Sans KR, Arial, sans-serif" font-size="32" font-weight="600">${displayName}님,</text>
-        <text x="360" y="437" font-family="Noto Sans KR, Arial, sans-serif" font-size="30">세 분의 리더를 위해</text>
+        <text x="360" y="437" font-family="Noto Sans KR, Arial, sans-serif" font-size="30">${leaderCountText}의 리더를 위해</text>
         <text x="360" y="483" font-family="Noto Sans KR, Arial, sans-serif" font-size="30">함께 기도했습니다.</text>
       </g>
       <path d="M180 557 H540" stroke="#222222" stroke-opacity=".22" stroke-width="1.5"/>
@@ -127,9 +133,13 @@ function drawDetails(snapshot) {
     : isCalendarDate(snapshot.id)
       ? snapshot.id
       : null;
+  const primaryCardIds = isValidCardIdList(draw.cardIds) ? draw.cardIds : [];
+  const additionalCardIds = isValidCardIdList(draw.additionalCardIds) ? draw.additionalCardIds : [];
   return {
     drawDate,
-    cardIds: isValidCardIdList(draw.cardIds) ? draw.cardIds : [],
+    // Additional cards are public to visitors who opt in, so they count in
+    // the fairness history just like the initial three-card draw.
+    cardIds: [...primaryCardIds, ...additionalCardIds],
   };
 }
 
@@ -222,11 +232,7 @@ async function getOrCreateDailyDraw(drawDate, { replaceLegacyDraw = false } = {}
  * also creates it as a safe fallback. Firestore Rules deny browser reads.
  */
 export const getDailyPrayerCards = onCall({
-  cors: [
-    'https://fam2-prayer-cards.web.app',
-    'https://fam2-prayer-cards.firebaseapp.com',
-    'https://jakjac7.github.io',
-  ],
+  cors: CALLABLE_CORS,
 }, async () => {
   const drawDate = koreaPrayerRoundDate();
   const assignedCards = await getOrCreateDailyDraw(drawDate);
@@ -240,6 +246,66 @@ export const getDailyPrayerCards = onCall({
     cards,
     drawDate,
   };
+});
+
+/**
+ * Returns one date-fixed additional round. The initial daily draw and any
+ * card already reserved as a replacement are excluded, so no visitor sees a
+ * duplicate when they choose to pray for three more leaders.
+ */
+async function getOrCreateAdditionalDailyDraw(drawDate) {
+  await getOrCreateDailyDraw(drawDate);
+  const drawRef = db.collection('dailyPrayerDraws').doc(drawDate);
+
+  return db.runTransaction(async (transaction) => {
+    const existingDraw = await transaction.get(drawRef);
+    if (!existingDraw.exists || !isValidCardIdList(existingDraw.data().cardIds)) {
+      throw new HttpsError('failed-precondition', '오늘의 기도카드를 먼저 준비해주세요.');
+    }
+
+    const existingAdditionalCardIds = existingDraw.data().additionalCardIds;
+    if (isValidCardIdList(existingAdditionalCardIds)) {
+      const snapshots = await Promise.all(
+        existingAdditionalCardIds.map((cardId) => transaction.get(db.collection('prayerCards').doc(cardId))),
+      );
+      if (snapshots.every((snapshot) => snapshot.exists)) return snapshots;
+    }
+
+    const [allCards, allDraws] = await Promise.all([
+      transaction.get(db.collection('prayerCards')),
+      transaction.get(db.collection('dailyPrayerDraws')),
+    ]);
+    const primaryCardIds = existingDraw.data().cardIds;
+    const replacementCardIds = isValidCardIdList(existingDraw.data().replacementCardIds)
+      ? existingDraw.data().replacementCardIds
+      : [];
+    const excludedCardIds = new Set([...primaryCardIds, ...replacementCardIds]);
+    const additionalCards = chooseFairCards(
+      allCards.docs.filter(isActiveCard),
+      allDraws.docs,
+      drawDate,
+      excludedCardIds,
+    );
+
+    transaction.set(drawRef, {
+      additionalCardIds: additionalCards.map((card) => card.id),
+      additionalAssignedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+    return additionalCards;
+  });
+}
+
+export const getAdditionalPrayerCards = onCall({
+  cors: CALLABLE_CORS,
+}, async () => {
+  const drawDate = koreaPrayerRoundDate();
+  const assignedCards = await getOrCreateAdditionalDailyDraw(drawDate);
+  const cards = assignedCards.map(asPrayerCard);
+  if (cards.some((card) => !card.name || card.prayers.length === 0)) {
+    throw new HttpsError('failed-precondition', '추가 기도카드 데이터 형식이 올바르지 않습니다.');
+  }
+
+  return { cards, drawDate };
 });
 
 /**
@@ -258,7 +324,8 @@ export const downloadAmenImage = onRequest(async (request, response) => {
   const requestDate = typeof request.query.date === 'string' ? request.query.date : '';
   const name = requestName.slice(0, 24);
   const drawDate = isCalendarDate(requestDate) ? requestDate : koreaPrayerRoundDate();
-  const image = await sharp(Buffer.from(amenCertificateSvg(name, drawDate)))
+  const leaderCount = request.query.count === '6' ? 6 : 3;
+  const image = await sharp(Buffer.from(amenCertificateSvg(name, drawDate, leaderCount)))
     .png({ compressionLevel: 9, palette: true })
     .toBuffer();
 
@@ -290,11 +357,7 @@ export const refreshDailyPrayerCards = onSchedule({
  * enumerable from the browser.
  */
 export const replaceDailyPrayerCard = onCall({
-  cors: [
-    'https://fam2-prayer-cards.web.app',
-    'https://fam2-prayer-cards.firebaseapp.com',
-    'https://jakjac7.github.io',
-  ],
+  cors: CALLABLE_CORS,
 }, async (request) => {
   const cardId = request.data?.cardId;
   if (typeof cardId !== 'string' || !cardId) {
@@ -322,8 +385,12 @@ export const replaceDailyPrayerCard = onCall({
         transaction.get(db.collection('prayerCards')),
         transaction.get(db.collection('dailyPrayerDraws')),
       ]);
+      const additionalCardIds = isValidCardIdList(existingDraw.data().additionalCardIds)
+        ? existingDraw.data().additionalCardIds
+        : [];
+      const unavailableCardIds = new Set([...assignedCardIds, ...additionalCardIds]);
       const availableCards = allCards.docs.filter(
-        (card) => isActiveCard(card) && !assignedCardIds.includes(card.id),
+        (card) => isActiveCard(card) && !unavailableCardIds.has(card.id),
       );
 
       replacementCardIds = chooseFairCards(availableCards, allDraws.docs, drawDate).map((card) => card.id);

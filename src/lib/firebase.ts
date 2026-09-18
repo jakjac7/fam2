@@ -15,6 +15,11 @@ export interface DailyPrayerCardsResult {
   drawDate: string;
 }
 
+export interface AdditionalPrayerCardsResult {
+  cards: FirebasePrayerCard[];
+  drawDate: string;
+}
+
 export interface PrayerCardReplacementResult {
   card: FirebasePrayerCard;
 }
@@ -53,6 +58,16 @@ export const firebaseServices = firebaseConfig
 export async function getDailyPrayerCards(): Promise<DailyPrayerCardsResult> {
   if (!firebaseServices) throw new Error('Firebase 공개 설정이 누락되었습니다.');
   const getCards = httpsCallable<void, DailyPrayerCardsResult>(firebaseServices.functions, 'getDailyPrayerCards');
+  return (await getCards()).data;
+}
+
+/** Returns the fixed additional three-card round for the current prayer date. */
+export async function getAdditionalPrayerCards(): Promise<AdditionalPrayerCardsResult> {
+  if (!firebaseServices) throw new Error('Firebase 공개 설정이 누락되었습니다.');
+  const getCards = httpsCallable<void, AdditionalPrayerCardsResult>(
+    firebaseServices.functions,
+    'getAdditionalPrayerCards',
+  );
   return (await getCards()).data;
 }
 

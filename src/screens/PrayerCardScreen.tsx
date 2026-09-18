@@ -10,6 +10,7 @@ interface Props {
   onComplete: () => void;
   onReplace: () => Promise<void>;
   canReplace: boolean;
+  leaderCount: number;
   watermark: string;
 }
 
@@ -22,6 +23,7 @@ export default function PrayerCardScreen({
   onComplete,
   onReplace,
   canReplace,
+  leaderCount,
   watermark,
 }: Props) {
   const isLast = currentIndex === visitedCards.length - 1;
@@ -174,7 +176,7 @@ export default function PrayerCardScreen({
             <div className="flex flex-col gap-2">
               {!canComplete && (
                 <p className="text-center text-sm text-black/60 mb-2 font-medium">
-                  세 분의 기도카드를 모두 확인해주세요
+                  {leaderCount === 6 ? '여섯 분의' : '세 분의'} 기도카드를 모두 확인해주세요
                 </p>
               )}
               <button

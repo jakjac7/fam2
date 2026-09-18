@@ -26,14 +26,15 @@ function hasValidStoredState(
   if (!value || typeof value !== 'object') return false;
 
   const state = value as Partial<AppState>;
+  const selectedCardCount = state.selectedCardIds?.length ?? 0;
   const hasCards =
     Array.isArray(state.selectedCardIds) &&
-    state.selectedCardIds.length === CARD_COUNT &&
-    new Set(state.selectedCardIds).size === CARD_COUNT &&
+    (selectedCardCount === CARD_COUNT || selectedCardCount === CARD_COUNT * 2) &&
+    new Set(state.selectedCardIds).size === selectedCardCount &&
     state.selectedCardIds.every((id) => typeof id === 'string' && cardIds.has(id));
   const hasVisitedCards =
     Array.isArray(state.visitedCards) &&
-    state.visitedCards.length === CARD_COUNT &&
+    state.visitedCards.length === (hasCards ? selectedCardCount : CARD_COUNT) &&
     state.visitedCards.every((visited) => typeof visited === 'boolean');
   const hasEmptySelection =
     Array.isArray(state.selectedCardIds) && state.selectedCardIds.length === 0;
@@ -64,7 +65,7 @@ function hasValidStoredState(
     hasCards &&
     hasVisitedCards &&
     state.currentCardIndex >= 0 &&
-    state.currentCardIndex < CARD_COUNT
+    state.currentCardIndex < selectedCardCount
   );
 }
 
@@ -130,7 +131,7 @@ export function useAppState(cards: PrayerCard[], roundKey: string) {
   };
 
   const navigateToCard = (index: number) => {
-    if (index >= 0 && index < CARD_COUNT) {
+    if (index >= 0 && index < state.selectedCardIds.length) {
       setState((current) => ({
         ...current,
         currentCardIndex: index,
@@ -142,7 +143,7 @@ export function useAppState(cards: PrayerCard[], roundKey: string) {
   };
 
   const nextCard = () => {
-    if (state.currentCardIndex < CARD_COUNT - 1) {
+    if (state.currentCardIndex < state.selectedCardIds.length - 1) {
       navigateToCard(state.currentCardIndex + 1);
     }
   };
@@ -158,8 +159,30 @@ export function useAppState(cards: PrayerCard[], roundKey: string) {
       ...current,
       screen: 'prayer',
       currentCardIndex: 0,
-      visitedCards: [true, ...Array(CARD_COUNT - 1).fill(false)],
+      visitedCards: [true, ...Array(current.selectedCardIds.length - 1).fill(false)],
     }));
+  };
+
+  const addAdditionalCards = (additionalCardIds: string[]) => {
+    if (
+      additionalCardIds.length !== CARD_COUNT
+      || new Set(additionalCardIds).size !== CARD_COUNT
+    ) return;
+
+    setState((current) => {
+      if (
+        current.selectedCardIds.length !== CARD_COUNT
+        || additionalCardIds.some((cardId) => current.selectedCardIds.includes(cardId))
+      ) return current;
+
+      return {
+        ...current,
+        screen: 'prayer',
+        selectedCardIds: [...current.selectedCardIds, ...additionalCardIds],
+        currentCardIndex: CARD_COUNT,
+        visitedCards: [...current.visitedCards, true, ...Array(CARD_COUNT - 1).fill(false)],
+      };
+    });
   };
 
   const replaceCurrentCard = (replacementId: string) => {
@@ -187,6 +210,7 @@ export function useAppState(cards: PrayerCard[], roundKey: string) {
     nextCard,
     completePrayer,
     prayMore,
+    addAdditionalCards,
     replaceCurrentCard,
   };
 }

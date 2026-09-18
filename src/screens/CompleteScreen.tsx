@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-function createAmenImage(name: string, drawDate: string): Promise<File> {
+function createAmenImage(name: string, drawDate: string, leaderCount: number): Promise<File> {
   const canvas = document.createElement('canvas');
   canvas.width = 720;
   canvas.height = 900;
@@ -31,7 +31,7 @@ function createAmenImage(name: string, drawDate: string): Promise<File> {
   context.font = '600 48px Pretendard, "Apple SD Gothic Neo", sans-serif';
   context.fillText(`${name || '기도자'}님,`, 540, 570);
   context.font = '500 45px Pretendard, "Apple SD Gothic Neo", sans-serif';
-  context.fillText('세 분의 리더를 위해', 540, 655);
+  context.fillText(`${leaderCount === 6 ? '여섯 분' : '세 분'}의 리더를 위해`, 540, 655);
   context.fillText('함께 기도했습니다.', 540, 725);
 
   context.strokeStyle = 'rgba(34, 34, 34, 0.22)';
@@ -61,17 +61,23 @@ function createAmenImage(name: string, drawDate: string): Promise<File> {
 
 export default function CompleteScreen({
   onPrayMore,
+  onPrayAdditional,
   name,
   drawDate,
+  leaderCount,
 }: {
   onPrayMore: () => void;
+  onPrayAdditional: () => Promise<void>;
   name: string;
   drawDate: string;
+  leaderCount: number;
 }) {
   const [shareStatus, setShareStatus] = useState('');
   const [amenImage, setAmenImage] = useState<File | null>(null);
   const [isPreparingImage, setIsPreparingImage] = useState(true);
   const [isSharing, setIsSharing] = useState(false);
+  const [isAddingLeaders, setIsAddingLeaders] = useState(false);
+  const [additionalPrayerError, setAdditionalPrayerError] = useState('');
   const isKakaoTalkInApp = /KAKAOTALK/i.test(navigator.userAgent);
 
   // Build the certificate before the tap. In-app browsers can revoke the
@@ -82,7 +88,7 @@ export default function CompleteScreen({
     setAmenImage(null);
     setIsPreparingImage(true);
 
-    void createAmenImage(name, drawDate)
+    void createAmenImage(name, drawDate, leaderCount)
       .then((image) => {
         if (isCurrent) setAmenImage(image);
       })
@@ -96,7 +102,21 @@ export default function CompleteScreen({
     return () => {
       isCurrent = false;
     };
-  }, [drawDate, name]);
+  }, [drawDate, leaderCount, name]);
+
+  const prayForAdditionalLeaders = async () => {
+    if (leaderCount !== 3 || isAddingLeaders) return;
+    setIsAddingLeaders(true);
+    setAdditionalPrayerError('');
+    try {
+      await onPrayAdditional();
+    } catch (error) {
+      setAdditionalPrayerError(
+        error instanceof Error ? error.message : '추가 기도카드를 준비하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+      );
+      setIsAddingLeaders(false);
+    }
+  };
 
   const shareAmenImage = async () => {
     // KakaoTalk's in-app browser downloads the certificate from the server,
@@ -112,6 +132,7 @@ export default function CompleteScreen({
         );
         downloadUrl.searchParams.set('name', name || '기도자');
         downloadUrl.searchParams.set('date', drawDate);
+        downloadUrl.searchParams.set('count', String(leaderCount));
         const downloadLink = document.createElement('a');
         downloadLink.href = downloadUrl.toString();
         downloadLink.style.display = 'none';
@@ -150,7 +171,7 @@ export default function CompleteScreen({
         <h1 className="card-title text-5xl mb-8">AMEN</h1>
         
         <p className="text-lg leading-relaxed text-black/85 font-medium break-keep">
-          {name ? `${name}님, ` : ''}세 분의 리더를 위해<br/>
+          {name ? `${name}님, ` : ''}{leaderCount === 6 ? '여섯 분' : '세 분'}의 리더를 위해<br/>
           함께 기도해 주셔서 감사합니다.
         </p>
 
@@ -159,8 +180,22 @@ export default function CompleteScreen({
           onClick={onPrayMore}
           className="mt-9 px-6 py-3 border border-black/30 text-black/80 font-semibold tracking-wide active:bg-black/5 transition-colors"
         >
-          같은 세 분을 다시 기도할게요
+          같은 {leaderCount === 6 ? '여섯 분' : '세 분'}을 다시 기도할게요
         </button>
+
+        {leaderCount === 3 && (
+          <div className="mt-3 w-full">
+            <button
+              type="button"
+              onClick={() => void prayForAdditionalLeaders()}
+              disabled={isAddingLeaders}
+              className="w-full border border-black bg-black py-3 text-sm font-semibold tracking-wide text-white active:scale-[0.98] transition-transform disabled:bg-black/45"
+            >
+              {isAddingLeaders ? '추가 기도카드를 준비하는 중…' : '추가로 세 분을 위해 기도할게요'}
+            </button>
+            {additionalPrayerError && <p className="mt-3 text-xs font-medium text-red-700" role="alert">{additionalPrayerError}</p>}
+          </div>
+        )}
 
         <div className="mt-4 w-full">
           <button

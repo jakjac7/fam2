@@ -2,7 +2,7 @@
 
 React/Vite 프론트엔드, Firebase Hosting, Cloud Functions, 비공개 Cloud Firestore로 구성한 가족캠프2 리더 중보기도 카드 웹앱입니다.
 
-기도카드 원문은 정적 번들에 넣지 않습니다. Firebase Function이 **한국 시간 기준 매일 새로 무작위로 고른 3장**만 반환하며, 모든 방문자는 그날 같은 3장을 봅니다. 브라우저는 Firestore 원본 카드 컬렉션을 직접 읽거나 쓸 수 없습니다.
+기도카드 원문은 정적 번들에 넣지 않습니다. Firebase Function이 **한국 시간 기준 매일 새로 무작위로 고른 3장**만 반환하며, 모든 방문자는 그날 같은 3장을 봅니다. 완료 화면에서 추가 기도를 선택하면, 기존·당일 추첨 인원을 제외한 고정된 3장을 더 받습니다. 브라우저는 Firestore 원본 카드 컬렉션을 직접 읽거나 쓸 수 없습니다.
 
 ## 보안 구조
 
@@ -12,8 +12,8 @@ Firebase Hosting → Cloud Function → Firestore
 ```
 
 - `firestore.rules`는 모든 브라우저의 Firestore 읽기·쓰기를 거부합니다.
-- `getDailyPrayerCards` Function은 한국 시간 날짜별로 3장을 한 번만 추첨합니다.
-- 그날 사이트를 방문한 사람은 동일한 3장을 보며, 자정 이후 새 추첨이 시작됩니다.
+- `getDailyPrayerCards` Function은 한국 시간 날짜별로 3장을 한 번만 추첨합니다. `getAdditionalPrayerCards`는 최초 3장 및 그날의 교체 후보와 겹치지 않는 추가 3장을 한 번만 추첨합니다.
+- 그날 사이트를 방문한 사람은 동일한 최초 3장을 보며, 추가 기도를 선택한 방문자는 동일한 추가 3장을 봅니다. 자정 이후 새 추첨이 시작됩니다.
 - 로그인 기능은 사용하지 않습니다. 따라서 하루의 3장은 URL을 아는 모든 방문자가 볼 수 있습니다.
 
 ## 최초 설정
