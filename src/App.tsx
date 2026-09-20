@@ -16,12 +16,18 @@ import SetupScreen from './screens/SetupScreen';
 function PrayerExperience({
   cards,
   drawDate,
+  sessionToken,
+  replacementUsed,
 }: {
   cards: PrayerCard[];
   drawDate: string;
+  sessionToken: string;
+  replacementUsed: boolean;
 }) {
   const [roundCards, setRoundCards] = useState(cards);
+  const [hasUsedReplacement, setHasUsedReplacement] = useState(replacementUsed);
   useEffect(() => setRoundCards(cards), [cards, drawDate]);
+  useEffect(() => setHasUsedReplacement(replacementUsed), [drawDate, replacementUsed]);
   const {
     state,
     handleConsent,
@@ -42,15 +48,16 @@ function PrayerExperience({
 
   const handleReplace = async () => {
     if (!currentCard) return;
-    const result = await replaceDailyPrayerCard(currentCard.id);
+    const result = await replaceDailyPrayerCard(currentCard.id, sessionToken);
     const [replacement] = normalizePrayerCards([result.card]);
     if (!replacement) throw new Error('교체할 기도카드를 준비하지 못했습니다.');
     setRoundCards((current) => [...current.filter((card) => card.id !== replacement.id), replacement]);
     replaceCurrentCard(replacement.id);
+    setHasUsedReplacement(true);
   };
 
   const handlePrayForAdditionalLeaders = async () => {
-    const result = await getAdditionalPrayerCards();
+    const result = await getAdditionalPrayerCards(sessionToken);
     if (result.drawDate !== drawDate) {
       throw new Error('기도 대상이 새로 갱신되었습니다. 페이지를 새로고침해 주세요.');
     }
@@ -87,7 +94,7 @@ function PrayerExperience({
           onNext={nextCard}
           onComplete={completePrayer}
           onReplace={handleReplace}
-          canReplace={dailyCardIds.has(currentCard.id)}
+          canReplace={dailyCardIds.has(currentCard.id) && !hasUsedReplacement}
           leaderCount={state.selectedCardIds.length}
           watermark={`${drawDate} · 기도 전용 · 외부 공유 금지`}
         />
@@ -99,6 +106,7 @@ function PrayerExperience({
           name={state.prayerName}
           drawDate={drawDate}
           leaderCount={state.selectedCardIds.length}
+          sessionToken={sessionToken}
         />
       )}
     </main>
@@ -116,6 +124,8 @@ export default function App() {
     <PrayerExperience
       cards={state.cards}
       drawDate={state.drawDate}
+      sessionToken={state.sessionToken}
+      replacementUsed={state.replacementUsed}
     />
   );
 }

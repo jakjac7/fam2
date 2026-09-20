@@ -7,14 +7,23 @@ React/Vite 프론트엔드, Firebase Hosting, Cloud Functions, 비공개 Cloud F
 ## 보안 구조
 
 ```text
-Firebase Hosting → Cloud Function → Firestore
-                              └ 오늘의 기도카드 3장만 반환
+Firebase Hosting → 세션 제한 Cloud Function → Firestore
+                                      └ 요청당 3장만 반환
 ```
 
 - `firestore.rules`는 모든 브라우저의 Firestore 읽기·쓰기를 거부합니다.
-- `getDailyPrayerCards` Function은 한국 시간 날짜별로 3장을 한 번만 추첨합니다. `getAdditionalPrayerCards`는 최초 3장 및 그날의 교체 후보와 겹치지 않는 추가 3장을 한 번만 추첨합니다.
-- 그날 사이트를 방문한 사람은 동일한 최초 3장을 보며, 추가 기도를 선택한 방문자는 동일한 추가 3장을 봅니다. 자정 이후 새 추첨이 시작됩니다.
-- 로그인 기능은 사용하지 않습니다. 따라서 하루의 3장은 URL을 아는 모든 방문자가 볼 수 있습니다.
+- `startPrayerSession`은 브라우저 세션 토큰을 발급하고 최초 3장만 반환합니다. 토큰 원문은 브라우저 `sessionStorage`에만 두며 서버에는 해시만 저장합니다.
+- 새 세션은 동일 브라우저 식별자당 하루 최대 3회, 세션 재개는 5회로 제한합니다. 기본·추가 카드 재요청과 인증 이미지 다운로드도 각각 한도가 있습니다. 재시도해도 같은 고정 카드만 반환됩니다.
+- `getAdditionalPrayerCards`는 세션당 재요청 한도가 있는 고정된 추가 3장만 반환합니다. 한 세션에서 볼 수 있는 카드는 기본 3장과 선택한 추가 3장, 그리고 본인 카드 교체 1장으로 제한됩니다.
+- `replaceDailyPrayerCard`는 해당 세션에 배정된 최초 카드만 교체하며 세션당 한 번만 허용합니다.
+- 그날 사이트를 방문한 사람은 동일한 최초 3장을 보며, 추가 기도를 선택한 방문자는 동일한 추가 3장을 봅니다. 한국 시간 매일 20:30에 새 추첨이 시작됩니다.
+- 로그인·행사 접근코드는 사용하지 않습니다. 따라서 하루의 공통 기도 대상은 URL을 아는 사람에게 열려 있으며, 세션 제한은 카드 원본의 일괄 수집을 어렵게 하는 보조 방어선입니다.
+
+### Firebase App Check 적용
+
+App Check를 강제하기 전에 Firebase Console에서 reCAPTCHA Enterprise 웹 키를 등록하고 정상 트래픽을 모니터링해야 합니다. 키는 GitHub Repository Secret `VITE_FIREBASE_APP_CHECK_SITE_KEY`에만 저장합니다. 배포 워크플로는 해당 값을 웹 앱에 전달하며, 값이 있으면 브라우저가 자동으로 App Check 토큰을 요청합니다.
+
+등록할 도메인은 최소 `fam2-prayer-cards.web.app`, `fam2-prayer-cards.firebaseapp.com`이며, GitHub Pages를 계속 제공하면 `jakjac7.github.io`도 추가합니다. 검증된 정상 요청이 확인되면 Callable Function의 App Check 강제를 활성화합니다. 키 없이 강제하면 모든 사용자 요청이 거부되므로, 이 단계는 키 등록 후에만 수행합니다.
 
 ## 최초 설정
 
@@ -31,6 +40,7 @@ Firebase Console에서 프로젝트를 만들고 Web App을 등록합니다. 프
 | `VITE_FIREBASE_MESSAGING_SENDER_ID` | `messagingSenderId` |
 | `VITE_FIREBASE_APP_ID` | `appId` |
 | `VITE_FIREBASE_FUNCTIONS_REGION` | `asia-northeast3` |
+| `VITE_FIREBASE_APP_CHECK_SITE_KEY` | reCAPTCHA Enterprise 웹 사이트 키 |
 
 Web App 구성값은 브라우저에 공개되는 식별자입니다. **서비스 계정 JSON, OAuth Client Secret, API 키 제한 해제용 키는 여기에 넣지 않습니다.**
 

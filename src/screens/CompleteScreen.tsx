@@ -65,12 +65,14 @@ export default function CompleteScreen({
   name,
   drawDate,
   leaderCount,
+  sessionToken,
 }: {
   onPrayMore: () => void;
   onPrayAdditional: () => Promise<void>;
   name: string;
   drawDate: string;
   leaderCount: number;
+  sessionToken: string;
 }) {
   const [shareStatus, setShareStatus] = useState('');
   const [amenImage, setAmenImage] = useState<File | null>(null);
@@ -133,6 +135,7 @@ export default function CompleteScreen({
         downloadUrl.searchParams.set('name', name || '기도자');
         downloadUrl.searchParams.set('date', drawDate);
         downloadUrl.searchParams.set('count', String(leaderCount));
+        downloadUrl.searchParams.set('session', sessionToken);
         const downloadLink = document.createElement('a');
         downloadLink.href = downloadUrl.toString();
         downloadLink.style.display = 'none';

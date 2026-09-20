@@ -1,4 +1,4 @@
-import { randomInt } from 'node:crypto';
+import { createHash, randomBytes, randomInt } from 'node:crypto';
 import sharp from 'sharp';
 import { initializeApp } from 'firebase-admin/app';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
@@ -15,6 +15,15 @@ const KOREA_TIME_ZONE = 'Asia/Seoul';
 const DRAW_HOUR = 20;
 const DRAW_MINUTE = 30;
 const DRAW_SCHEDULE_VERSION = '20:30-kst-v1';
+const PRAYER_SESSIONS_COLLECTION = 'prayerSessions';
+const PRAYER_SESSION_CLIENTS_COLLECTION = 'prayerSessionClients';
+const MAX_SESSIONS_PER_CLIENT_PER_DRAW = 3;
+const MAX_SESSION_RESUMES_PER_SESSION = 5;
+const MAX_PRIMARY_READS_PER_SESSION = 3;
+const MAX_ADDITIONAL_READS_PER_SESSION = 2;
+const MAX_CERTIFICATE_DOWNLOADS_PER_SESSION = 5;
+const SESSION_TOKEN_PATTERN = /^[A-Za-z0-9_-]{32,}$/;
+const CLIENT_ID_PATTERN = /^[a-f0-9]{32}$/i;
 const CALLABLE_CORS = [
   'https://fam2-prayer-cards.web.app',
   'https://fam2-prayer-cards.firebaseapp.com',
@@ -85,6 +94,110 @@ function isValidCardIdList(value) {
 
 function isCalendarDate(value) {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function hashOpaqueValue(value) {
+  return createHash('sha256').update(value).digest('base64url');
+}
+
+function newSessionToken() {
+  return randomBytes(32).toString('base64url');
+}
+
+function prayerSessionRef(sessionToken) {
+  if (typeof sessionToken !== 'string' || !SESSION_TOKEN_PATTERN.test(sessionToken)) {
+    throw new HttpsError('unauthenticated', '유효한 기도 세션이 필요합니다.');
+  }
+  return db.collection(PRAYER_SESSIONS_COLLECTION).doc(hashOpaqueValue(sessionToken));
+}
+
+function sessionClientRef(drawDate, clientId) {
+  if (typeof clientId !== 'string' || !CLIENT_ID_PATTERN.test(clientId)) {
+    throw new HttpsError('invalid-argument', '안전한 기기 식별자를 확인하지 못했습니다.');
+  }
+  return db.collection(PRAYER_SESSION_CLIENTS_COLLECTION).doc(`${drawDate}-${hashOpaqueValue(clientId)}`);
+}
+
+function isPrayerSessionForDraw(snapshot, drawDate) {
+  if (!snapshot.exists) return false;
+  const session = snapshot.data();
+  return session.drawDate === drawDate;
+}
+
+/**
+ * Session capabilities are deliberately narrow: retries can only return the
+ * same fixed draw, and each endpoint has a bounded retry allowance.
+ */
+async function consumeSessionAllowance(sessionToken, drawDate, field, maximum) {
+  const ref = prayerSessionRef(sessionToken);
+  return db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (!isPrayerSessionForDraw(snapshot, drawDate)) {
+      throw new HttpsError('unauthenticated', '기도 세션이 만료되었습니다. 페이지를 새로고침해 다시 시작해 주세요.');
+    }
+
+    const current = Number(snapshot.data()[field] ?? 0);
+    if (!Number.isSafeInteger(current) || current >= maximum) {
+      throw new HttpsError('resource-exhausted', '이 세션의 재요청 한도를 초과했습니다. 잠시 후 새로고침해 주세요.');
+    }
+
+    transaction.update(ref, {
+      [field]: current + 1,
+      lastAccessAt: FieldValue.serverTimestamp(),
+    });
+    return snapshot.data();
+  });
+}
+
+async function startOrResumePrayerSession({ clientId, sessionToken }) {
+  const drawDate = koreaPrayerRoundDate();
+
+  if (typeof sessionToken === 'string' && sessionToken) {
+    const data = await consumeSessionAllowance(
+      sessionToken,
+      drawDate,
+      'sessionResumes',
+      MAX_SESSION_RESUMES_PER_SESSION,
+    );
+    return {
+      drawDate,
+      sessionToken,
+      replacementUsed: typeof data.replacedPrimaryCardId === 'string',
+    };
+  }
+
+  const clientRef = sessionClientRef(drawDate, clientId);
+  const token = newSessionToken();
+  const sessionRef = prayerSessionRef(token);
+  await db.runTransaction(async (transaction) => {
+    const clientSnapshot = await transaction.get(clientRef);
+    const sessionStarts = clientSnapshot.exists ? Number(clientSnapshot.data().sessionStarts ?? 0) : 0;
+    if (!Number.isSafeInteger(sessionStarts) || sessionStarts >= MAX_SESSIONS_PER_CLIENT_PER_DRAW) {
+      throw new HttpsError(
+        'resource-exhausted',
+        '오늘 이 기기에서 새 기도 세션을 너무 많이 시작했습니다. 기존 탭을 사용해 주세요.',
+      );
+    }
+
+    transaction.set(clientRef, {
+      drawDate,
+      sessionStarts: sessionStarts + 1,
+      lastStartedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+    transaction.create(sessionRef, {
+      drawDate,
+      clientIdHash: hashOpaqueValue(clientId),
+      createdAt: FieldValue.serverTimestamp(),
+      lastAccessAt: FieldValue.serverTimestamp(),
+      primaryReads: 1,
+      sessionResumes: 0,
+      additionalReads: 0,
+      certificateDownloads: 0,
+      replacedPrimaryCardId: null,
+    });
+  });
+
+  return { drawDate, sessionToken: token, replacementUsed: false };
 }
 
 function escapeSvgText(value) {
@@ -227,14 +340,15 @@ async function getOrCreateDailyDraw(drawDate, { replaceLegacyDraw = false } = {}
 }
 
 /**
- * Returns the same three cards to every visitor from 20:30 KST until the next
- * 20:29 KST. The scheduled function prepares the draw at 20:30; this callable
- * also creates it as a safe fallback. Firestore Rules deny browser reads.
+ * Starts one short-lived browser session. The initial response always
+ * contains exactly the shared three-card draw; the card collection itself is
+ * never sent to the browser.
  */
-export const getDailyPrayerCards = onCall({
+export const startPrayerSession = onCall({
   cors: CALLABLE_CORS,
-}, async () => {
-  const drawDate = koreaPrayerRoundDate();
+}, async (request) => {
+  const session = await startOrResumePrayerSession(request.data ?? {});
+  const { drawDate } = session;
   const assignedCards = await getOrCreateDailyDraw(drawDate);
 
   const cards = assignedCards.map(asPrayerCard);
@@ -245,7 +359,31 @@ export const getDailyPrayerCards = onCall({
   return {
     cards,
     drawDate,
+    sessionToken: session.sessionToken,
+    replacementUsed: session.replacementUsed,
   };
+});
+
+/**
+ * Kept only for a controlled retry path. It no longer grants an anonymous
+ * browser access to the three daily cards.
+ */
+export const getDailyPrayerCards = onCall({
+  cors: CALLABLE_CORS,
+}, async (request) => {
+  const drawDate = koreaPrayerRoundDate();
+  await consumeSessionAllowance(
+    request.data?.sessionToken,
+    drawDate,
+    'primaryReads',
+    MAX_PRIMARY_READS_PER_SESSION,
+  );
+  const assignedCards = await getOrCreateDailyDraw(drawDate);
+  const cards = assignedCards.map(asPrayerCard);
+  if (cards.some((card) => !card.name || card.prayers.length === 0)) {
+    throw new HttpsError('failed-precondition', '기도카드 데이터 형식이 올바르지 않습니다.');
+  }
+  return { cards, drawDate };
 });
 
 /**
@@ -297,8 +435,14 @@ async function getOrCreateAdditionalDailyDraw(drawDate) {
 
 export const getAdditionalPrayerCards = onCall({
   cors: CALLABLE_CORS,
-}, async () => {
+}, async (request) => {
   const drawDate = koreaPrayerRoundDate();
+  await consumeSessionAllowance(
+    request.data?.sessionToken,
+    drawDate,
+    'additionalReads',
+    MAX_ADDITIONAL_READS_PER_SESSION,
+  );
   const assignedCards = await getOrCreateAdditionalDailyDraw(drawDate);
   const cards = assignedCards.map(asPrayerCard);
   if (cards.some((card) => !card.name || card.prayers.length === 0)) {
@@ -311,12 +455,26 @@ export const getAdditionalPrayerCards = onCall({
 /**
  * Serves a real PNG attachment for KakaoTalk's in-app browser. Unlike a Blob
  * URL created in the page, this response is handled by the browser downloader.
- * The request carries only the voluntary display name and draw date; no prayer
- * card content is read or stored here.
+ * A valid prayer-session capability is required. The request carries only the
+ * voluntary display name and draw date; no prayer-card content is read here.
  */
 export const downloadAmenImage = onRequest(async (request, response) => {
   if (request.method !== 'GET') {
     response.set('Allow', 'GET').status(405).send('Method Not Allowed');
+    return;
+  }
+
+  const requestSession = typeof request.query.session === 'string' ? request.query.session : '';
+  try {
+    await consumeSessionAllowance(
+      requestSession,
+      koreaPrayerRoundDate(),
+      'certificateDownloads',
+      MAX_CERTIFICATE_DOWNLOADS_PER_SESSION,
+    );
+  } catch (error) {
+    const status = error instanceof HttpsError && error.code === 'resource-exhausted' ? 429 : 401;
+    response.status(status).set('Cache-Control', 'no-store').send('Prayer session required');
     return;
   }
 
@@ -360,14 +518,22 @@ export const replaceDailyPrayerCard = onCall({
   cors: CALLABLE_CORS,
 }, async (request) => {
   const cardId = request.data?.cardId;
+  const sessionToken = request.data?.sessionToken;
   if (typeof cardId !== 'string' || !cardId) {
     throw new HttpsError('invalid-argument', '교체할 기도카드를 확인하지 못했습니다.');
   }
 
   const drawDate = koreaPrayerRoundDate();
   const drawRef = db.collection('dailyPrayerDraws').doc(drawDate);
+  const sessionRef = prayerSessionRef(sessionToken);
   const replacementSnapshot = await db.runTransaction(async (transaction) => {
-    const existingDraw = await transaction.get(drawRef);
+    const [sessionSnapshot, existingDraw] = await Promise.all([
+      transaction.get(sessionRef),
+      transaction.get(drawRef),
+    ]);
+    if (!isPrayerSessionForDraw(sessionSnapshot, drawDate)) {
+      throw new HttpsError('unauthenticated', '기도 세션이 만료되었습니다. 페이지를 새로고침해 다시 시작해 주세요.');
+    }
     if (!existingDraw.exists || !isValidCardIdList(existingDraw.data().cardIds)) {
       throw new HttpsError('failed-precondition', '오늘의 기도카드를 먼저 준비해주세요.');
     }
@@ -376,6 +542,11 @@ export const replaceDailyPrayerCard = onCall({
     const assignedIndex = assignedCardIds.indexOf(cardId);
     if (assignedIndex < 0) {
       throw new HttpsError('failed-precondition', '오늘 배정된 기도카드만 교체할 수 있습니다.');
+    }
+
+    const alreadyReplaced = sessionSnapshot.data().replacedPrimaryCardId;
+    if (typeof alreadyReplaced === 'string' && alreadyReplaced !== cardId) {
+      throw new HttpsError('resource-exhausted', '한 기도 세션에서는 카드 한 장만 교체할 수 있습니다.');
     }
 
     let replacementCardIds = existingDraw.data().replacementCardIds;
@@ -402,6 +573,12 @@ export const replaceDailyPrayerCard = onCall({
     );
     if (generatedReplacementCardIds) {
       transaction.set(drawRef, { replacementCardIds: generatedReplacementCardIds }, { merge: true });
+    }
+    if (alreadyReplaced !== cardId) {
+      transaction.update(sessionRef, {
+        replacedPrimaryCardId: cardId,
+        lastAccessAt: FieldValue.serverTimestamp(),
+      });
     }
     return snapshot;
   });
