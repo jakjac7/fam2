@@ -283,18 +283,24 @@ function buildSelectionHistory(drawSnapshots, beforeDate) {
 
 function chooseFairCards(activeCards, drawSnapshots, drawDate, excludedCardIds = new Set()) {
   const { history, recentCardIds } = buildSelectionHistory(drawSnapshots, drawDate);
-  const eligibleCards = activeCards.filter(
-    (card) => !recentCardIds.has(card.id) && !excludedCardIds.has(card.id),
-  );
-  if (eligibleCards.length < CARDS_PER_ROUND) {
+  const availableCards = activeCards.filter((card) => !excludedCardIds.has(card.id));
+  if (availableCards.length < CARDS_PER_ROUND) {
     throw new HttpsError(
       'failed-precondition',
-      '최근 5일을 제외하고 추출할 기도카드가 충분하지 않습니다.',
+      '추출할 기도카드가 충분하지 않습니다.',
     );
   }
 
+  const recentFiveDayExcludedCards = availableCards.filter((card) => !recentCardIds.has(card.id));
+  // Five days without repetition is the preferred rule. With a compact
+  // roster it can make an additional round impossible, so fall back to all
+  // available cards while preserving the long-term fairness priorities below.
+  const selectionPool = recentFiveDayExcludedCards.length >= CARDS_PER_ROUND
+    ? recentFiveDayExcludedCards
+    : availableCards;
+
   // Shuffle only breaks complete ties; the fairness priority remains fixed.
-  return pickUniqueCards(eligibleCards, eligibleCards.length)
+  return pickUniqueCards(selectionPool, selectionPool.length)
     .sort((left, right) => {
       const leftHistory = history.get(left.id) ?? { count: 0, lastSelectedDate: '' };
       const rightHistory = history.get(right.id) ?? { count: 0, lastSelectedDate: '' };
