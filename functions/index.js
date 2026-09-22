@@ -248,11 +248,13 @@ function drawDetails(snapshot) {
       : null;
   const primaryCardIds = isValidCardIdList(draw.cardIds) ? draw.cardIds : [];
   const additionalCardIds = isValidCardIdList(draw.additionalCardIds) ? draw.additionalCardIds : [];
+  const replacementUsedCardIds = Array.isArray(draw.replacementUsedCardIds)
+    ? draw.replacementUsedCardIds.filter((cardId) => typeof cardId === 'string' && cardId)
+    : [];
   return {
     drawDate,
-    // Additional cards are public to visitors who opt in, so they count in
-    // the fairness history just like the initial three-card draw.
-    cardIds: [...primaryCardIds, ...additionalCardIds],
+    // Only cards actually delivered to a visitor count in the history.
+    cardIds: [...primaryCardIds, ...additionalCardIds, ...replacementUsedCardIds],
   };
 }
 
@@ -580,6 +582,9 @@ export const replaceDailyPrayerCard = onCall({
     if (generatedReplacementCardIds) {
       transaction.set(drawRef, { replacementCardIds: generatedReplacementCardIds }, { merge: true });
     }
+    transaction.set(drawRef, {
+      replacementUsedCardIds: FieldValue.arrayUnion(replacementCardIds[assignedIndex]),
+    }, { merge: true });
     if (alreadyReplaced !== cardId) {
       transaction.update(sessionRef, {
         replacedPrimaryCardId: cardId,

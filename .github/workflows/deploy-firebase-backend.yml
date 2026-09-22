@@ -42,3 +42,9 @@ jobs:
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
         run: npx firebase-tools@latest deploy --only firestore,functions:prayer-cards --project fam2-prayer-cards --non-interactive
+
+      - name: Stabilize prayer-card identifiers and draw history
+        env:
+          FIREBASE_PROJECT_ID: fam2-prayer-cards
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
+        run: node functions/scripts/migrate-prayer-card-ids.mjs

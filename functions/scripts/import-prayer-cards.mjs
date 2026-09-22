@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -9,6 +10,11 @@ const dryRun = argumentsAfterScript.includes('--dry-run');
 const inputPath = argumentsAfterScript.find((argument) => argument !== '--dry-run')
   ?? path.join(projectRoot, 'PrayerCards.md');
 const projectId = process.env.FIREBASE_PROJECT_ID;
+
+function stableLeaderId(name, cell) {
+  const identity = `${name.normalize('NFC').trim()}\u0000${(cell ?? '').normalize('NFC').trim()}`;
+  return `leader-${createHash('sha256').update(identity).digest('hex').slice(0, 24)}`;
+}
 
 const markdown = await readFile(inputPath, 'utf8');
 const [cardSection] = markdown.split(/^#\s+웹 입력용 TypeScript\s*$/m);
@@ -23,10 +29,14 @@ const cards = headings.map((heading, index) => {
     .map((line) => line.match(/^\s*\d+\.\s+(.+)$/)?.[1]?.trim())
     .filter(Boolean);
 
+  const name = identity?.[1]?.trim() ?? headingText;
+  const cell = identity?.[2]?.trim() ?? null;
   return {
-    id: `leader-${heading[1].padStart(3, '0')}`,
-    name: identity?.[1]?.trim() ?? headingText,
-    cell: identity?.[2]?.trim() ?? null,
+    // The heading number can change when a card is inserted or reordered.
+    // Keep selection history attached to the person instead of that number.
+    id: stableLeaderId(name, cell),
+    name,
+    cell,
     prayers,
     active: true,
   };
